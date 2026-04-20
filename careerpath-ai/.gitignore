@@ -1,0 +1,54 @@
+# Environment
+.env
+.env.local
+.env.*.local
+keys/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Build outputs
+.next/
+dist/
+build/
+*.egg-info/
+
+# Docker volumes (local dev data)
+data/postgres/
+data/redis/
+data/qdrant/
+data/minio/
+data/kafka/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+.coverage
+htmlcov/
+
+# Prisma
+prisma/migrations/
+
+# Playwright
+playwright-report/
+test-results/

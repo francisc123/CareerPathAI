@@ -1,0 +1,649 @@
+
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║           CAREERPATH AI — PRODUCTION MICROSERVICES ARCHITECTURE v2.0                    ║
+║           Expert Cloud Architect Design | Docker-First | Multi-Agent AI Platform        ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ DIRECTORY TREE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+careerpath-ai/
+│
+├── docker-compose.yml               # Orchestrare locala dev (toate 18 containere)
+├── docker-compose.prod.yml          # Override-uri de productie (replicas, resource limits)
+├── .env.example                     # Template variabile: DB passwords, API keys, JWT secrets
+├── .gitignore
+├── Makefile                         # Comenzi scurte: make up, make down, make logs, make migrate
+├── README.md
+│
+├── ── ── ── ── LAYER 1: FRONTEND ── ── ── ── ──
+│
+├── frontend/                        # [CONTAINER 01] UI — Next.js 14 App Router
+│   ├── Dockerfile                   # Multi-stage: node:20-alpine builder + nginx:alpine server
+│   ├── next.config.ts
+│   ├── package.json
+│   ├── tailwind.config.ts
+│   ├── public/
+│   │   └── assets/
+│   └── src/
+│       ├── app/                     # Next.js App Router pages
+│       │   ├── (auth)/
+│       │   │   ├── login/page.tsx
+│       │   │   └── register/page.tsx
+│       │   ├── dashboard/page.tsx   # Stare candidat + scor CV + recomandari
+│       │   ├── cv-upload/page.tsx   # Upload CV + progress tracker real-time (SSE)
+│       │   ├── learning/
+│       │   │   ├── path/page.tsx    # Learning path personalizat generat de AI
+│       │   │   └── quiz/[id]/page.tsx
+│       │   ├── jobs/page.tsx        # Job matches scraped + filtrate de AI
+│       │   └── interview/
+│       │       ├── hr/page.tsx      # Simulator interviu HR (text/voice)
+│       │       └── technical/page.tsx # Simulator interviu tehnic (cod + chat)
+│       ├── components/
+│       │   ├── ui/                  # shadcn/ui primitives
+│       │   ├── ChatWindow.tsx       # Componenta chat real-time (WebSocket)
+│       │   ├── CodeEditor.tsx       # Monaco Editor pt interviuri tehnice
+│       │   ├── CVScoreGauge.tsx     # Indicator circular scor CV 0-100
+│       │   └── JobCard.tsx
+│       ├── lib/
+│       │   ├── api-client.ts        # Axios client catre API Gateway
+│       │   └── socket.ts            # WebSocket client (Socket.io)
+│       └── store/
+│           └── zustand/             # State management global (Zustand)
+│
+├── ── ── ── ── LAYER 2: API GATEWAY ── ── ── ── ──
+│
+├── api-gateway/                     # [CONTAINER 02] Gateway — Node.js + Fastify
+│   ├── Dockerfile                   # node:20-alpine
+│   ├── package.json
+│   └── src/
+│       ├── main.ts                  # Entry point, register plugins
+│       ├── plugins/
+│       │   ├── auth.plugin.ts       # JWT verify middleware (RS256)
+│       │   ├── rate-limit.plugin.ts # 100 req/min per IP (fastify-rate-limit)
+│       │   └── cors.plugin.ts
+│       ├── routes/
+│       │   ├── proxy.ts             # HTTP reverse proxy catre microservicii interne
+│       │   └── ws-proxy.ts          # WebSocket proxy catre Interview Simulator
+│       └── middleware/
+│           └── logger.ts            # Pino structured logging + request-id tracing
+│
+├── ── ── ── ── LAYER 3: CORE MICROSERVICES ── ── ── ── ──
+│
+├── services/
+│   │
+│   ├── user-service/                # [CONTAINER 03] Users & Auth — Node.js + Fastify
+│   │   ├── Dockerfile
+│   │   ├── package.json
+│   │   └── src/
+│   │       ├── main.ts
+│   │       ├── routes/
+│   │       │   ├── auth.routes.ts   # POST /register, /login, /refresh, /logout
+│   │       │   └── profile.routes.ts # GET/PUT /profile, GET /progress
+│   │       ├── services/
+│   │       │   ├── auth.service.ts  # bcrypt hash, JWT RS256 sign/verify
+│   │       │   └── profile.service.ts
+│   │       ├── models/              # Prisma ORM -> PostgreSQL
+│   │       │   └── schema.prisma    # User, Profile, Progress, Session tables
+│   │       └── events/
+│   │           └── publisher.ts     # Publica "user.registered" pe Kafka
+│   │
+│   ├── cv-service/                  # [CONTAINER 04] CV Processing — Python + FastAPI
+│   │   ├── Dockerfile               # python:3.12-slim + poppler + tesseract
+│   │   ├── requirements.txt         # fastapi, pdfplumber, python-docx, pytesseract, boto3
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── routers/
+│   │       │   └── cv.router.py     # POST /upload, GET /status/{job_id}
+│   │       ├── services/
+│   │       │   ├── parser.py        # Extrage text din PDF/DOCX/imagine (OCR fallback)
+│   │       │   ├── storage.py       # Upload fisier brut in MinIO (S3-compatible)
+│   │       │   └── publisher.py     # Publica "cv.uploaded" pe Kafka cu job_id
+│   │       └── schemas/
+│   │           └── cv.schema.py     # Pydantic models
+│   │
+│   ├── job-scraper-service/         # [CONTAINER 05] Job Scraping — Python + FastAPI
+│   │   ├── Dockerfile               # python:3.12-slim + playwright browsers
+│   │   ├── requirements.txt         # fastapi, playwright, selenium, beautifulsoup4, celery
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── routers/
+│   │       │   └── jobs.router.py   # GET /jobs/{user_id}, POST /scrape/trigger
+│   │       ├── scrapers/
+│   │       │   ├── linkedin.py      # Playwright scraper LinkedIn Jobs
+│   │       │   ├── indeed.py        # BeautifulSoup scraper Indeed
+│   │       │   └── ejobs.py         # Scraper eJobs.ro / BestJobs (piata romaneasca)
+│   │       ├── services/
+│   │       │   ├── deduplicator.py  # Elimina joburi duplicate (URL hash)
+│   │       │   └── publisher.py     # Publica "jobs.scraped" pe Kafka
+│   │       └── tasks/
+│   │           └── celery_worker.py # Worker async pentru scraping jobs in background
+│   │
+│   ├── notification-service/        # [CONTAINER 06] Notificari — Node.js + Fastify
+│   │   ├── Dockerfile
+│   │   ├── package.json
+│   │   └── src/
+│   │       ├── main.ts
+│   │       ├── consumers/
+│   │       │   └── kafka.consumer.ts # Asculta topics: *.completed, *.failed
+│   │       ├── channels/
+│   │       │   ├── email.ts          # Nodemailer + SMTP / SendGrid
+│   │       │   ├── push.ts           # Web Push Notifications (vapid)
+│   │       │   └── sse.ts            # Server-Sent Events catre frontend (progress updates)
+│   │       └── templates/
+│   │           ├── cv-ready.html
+│   │           ├── jobs-found.html
+│   │           └── interview-feedback.html
+│   │
+├── ── ── ── ── LAYER 4: AI AGENT MICROSERVICES ── ── ── ── ──
+│
+│   ├── agent-orchestrator/          # [CONTAINER 07] Orchestrator — Python + FastAPI
+│   │   ├── Dockerfile               # python:3.12-slim + LangGraph
+│   │   ├── requirements.txt         # fastapi, langgraph, langchain, anthropic, openai, kafka-python
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── routers/
+│   │       │   └── orchestrator.router.py # POST /workflow/start, GET /workflow/{id}/status
+│   │       ├── workflows/
+│   │       │   ├── flow_ready_candidate.py    # Flow 1: CV bun -> Scraping -> Job Match
+│   │       │   ├── flow_needs_prep.py         # Flow 2: CV slab -> Gap Analysis -> Invatare
+│   │       │   └── flow_interview_prep.py     # Flow 3: Pregatire -> Simulare Interviu
+│   │       ├── consumers/
+│   │       │   ├── cv_analyzed.consumer.py    # Asculta "cv.analyzed" -> decide flow
+│   │       │   └── learning_done.consumer.py  # Asculta "learning.completed" -> trigger interviu
+│   │       └── services/
+│   │           ├── state_machine.py  # LangGraph StateGraph - manage workflow state
+│   │           └── router.py         # Decide: Flow1 / Flow2 / Flow3 pe baza scorului CV
+│   │
+│   ├── cv-analyzer-agent/           # [CONTAINER 08] CV Analyzer Agent — Python + FastAPI
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt         # fastapi, anthropic, langchain, qdrant-client, kafka-python
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── routers/
+│   │       │   └── analyzer.router.py # POST /analyze (intern, apelat de orchestrator)
+│   │       ├── consumers/
+│   │       │   └── cv_uploaded.consumer.py  # Asculta topic "cv.uploaded"
+│   │       ├── agents/
+│   │       │   ├── scoring_agent.py   # LLM: scoreaza CV 0-100, identifica gaps
+│   │       │   ├── skills_extractor.py # Extrage skills, experienta, educatie
+│   │       │   └── gap_analyzer.py    # Compara cu job requirements din Vector DB
+│   │       ├── rag/
+│   │       │   ├── embedder.py        # Genereaza embeddings (OpenAI text-embedding-3-small)
+│   │       │   └── qdrant_client.py   # Cauta joburi similare in Qdrant Vector DB
+│   │       └── publishers/
+│   │           └── cv_analyzed.publisher.py  # Publica "cv.analyzed" cu scor + gaps
+│   │
+│   ├── learning-path-agent/         # [CONTAINER 09] AI Professor Agent — Python + FastAPI
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt         # fastapi, anthropic, openai, langchain, kafka-python
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── consumers/
+│   │       │   └── gaps_identified.consumer.py # Asculta "cv.analyzed" unde scor < 70
+│   │       ├── agents/
+│   │       │   ├── curriculum_designer.py  # LLM: genereaza plan invatare personalizat
+│   │       │   ├── content_generator.py    # LLM: genereaza lectii, exercitii, resurse
+│   │       │   └── quiz_generator.py       # LLM: genereaza quizuri cu raspunsuri corecte
+│   │       ├── integrations/
+│   │       │   ├── udemy_api.py        # Cauta cursuri relevante pe Udemy API
+│   │       │   └── youtube_search.py   # Cauta tutoriale YouTube (Data API v3)
+│   │       └── publishers/
+│   │           └── learning_path.publisher.py # Publica "learning.path.created"
+│   │
+│   ├── job-match-agent/             # [CONTAINER 10] Job Matching Agent — Python + FastAPI
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt         # fastapi, anthropic, qdrant-client, kafka-python
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── consumers/
+│   │       │   └── jobs_scraped.consumer.py # Asculta "jobs.scraped"
+│   │       ├── agents/
+│   │       │   ├── semantic_matcher.py  # Cosine similarity CV embedding vs Job embedding
+│   │       │   ├── ranker.py            # LLM reranker - top 10 job matches
+│   │       │   └── cover_letter.py      # LLM: genereaza cover letter personalizat per job
+│   │       ├── rag/
+│   │       │   ├── job_indexer.py       # Indexeaza joburi scraped in Qdrant
+│   │       │   └── cv_retriever.py      # Retrieves CV embedding din Qdrant
+│   │       └── publishers/
+│   │           └── jobs_matched.publisher.py # Publica "jobs.matched" cu top matches
+│   │
+│   ├── hr-interview-agent/          # [CONTAINER 11] HR Simulator Agent — Python + FastAPI
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt         # fastapi, anthropic, openai, websockets, kafka-python
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── routers/
+│   │       │   └── hr.router.py     # WebSocket /ws/hr-interview/{session_id}
+│   │       ├── agents/
+│   │       │   ├── hr_persona.py    # LLM cu persona HR: comportament, stil intrebari
+│   │       │   ├── question_bank.py # Banca intrebari: motivatie, cultura, salary expectations
+│   │       │   └── feedback_analyzer.py # LLM: analizeaza raspunsurile, da scor + sugestii
+│   │       └── sessions/
+│   │           └── session_manager.py  # Gestioneaza starea conversatiei in Redis
+│   │
+│   ├── technical-interview-agent/   # [CONTAINER 12] Tech Interviewer Agent — Python + FastAPI
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt         # fastapi, anthropic, websockets, judge0-client, kafka-python
+│   │   └── src/
+│   │       ├── main.py
+│   │       ├── routers/
+│   │       │   └── tech.router.py   # WebSocket /ws/tech-interview/{session_id}
+│   │       ├── agents/
+│   │       │   ├── tech_persona.py    # LLM cu persona Senior Developer interviewer
+│   │       │   ├── problem_selector.py # Selecteaza probleme LeetCode-style bazat pe stack
+│   │       │   ├── code_evaluator.py  # Trimite cod catre Judge0 API (sandbox executie)
+│   │       │   └── feedback_generator.py # LLM: feedback detaliat: complexitate, edge cases
+│   │       └── sessions/
+│   │           └── session_manager.py
+│
+├── ── ── ── ── LAYER 5: INFRASTRUCTURE SERVICES ── ── ── ── ──
+│
+├── infrastructure/
+│   │
+│   ├── postgres/                    # [CONTAINER 13] PostgreSQL 16
+│   │   ├── init/
+│   │   │   └── 01_schema.sql        # Creare tabele: users, profiles, progress, sessions,
+│   │   │                            #   learning_paths, quiz_attempts, interview_sessions
+│   │   └── backup/
+│   │       └── backup.sh            # Cron daily backup -> MinIO
+│   │
+│   ├── redis/                       # [CONTAINER 14] Redis 7 (Cache + Session Store)
+│   │   └── redis.conf               # maxmemory 512mb, eviction: allkeys-lru
+│   │                                # Utilizare: JWT blacklist, interview session state,
+│   │                                #   rate limiting counters, job queue (BullMQ)
+│   │
+│   ├── qdrant/                      # [CONTAINER 15] Qdrant Vector DB
+│   │   └── config.yaml              # Collections: cv_embeddings, job_embeddings,
+│   │                                #   course_embeddings (dim: 1536, metric: Cosine)
+│   │
+│   ├── kafka/                       # [CONTAINER 16] Apache Kafka + Zookeeper
+│   │   ├── docker-compose.kafka.yml
+│   │   └── topics/
+│   │       └── create-topics.sh     # Script creare topics la startup:
+│   │                                #   user.registered, cv.uploaded, cv.analyzed,
+│   │                                #   jobs.scraped, jobs.matched, learning.path.created,
+│   │                                #   learning.completed, interview.completed
+│   │
+│   ├── minio/                       # [CONTAINER 17] MinIO (S3-compatible Object Storage)
+│   │   └── init-buckets.sh          # Creare buckets: cvs-raw, cvs-processed, course-materials
+│   │
+│   └── kafka-ui/                    # [CONTAINER 18] Kafka UI (Provectus) — Dev/Ops
+│       └── config.yml               # Vizualizare topics, consumer groups, lag monitoring
+│
+├── ── ── ── ── LAYER 6: OBSERVABILITY ── ── ── ── ──
+│
+├── observability/
+│   ├── prometheus/
+│   │   └── prometheus.yml           # Scrape configs pentru toate serviciile (/metrics)
+│   ├── grafana/
+│   │   └── dashboards/
+│   │       ├── services-overview.json  # Latenta, throughput, error rate per serviciu
+│   │       ├── kafka-topics.json       # Consumer lag, messages/sec per topic
+│   │       └── ai-agents.json          # LLM token usage, agent execution time
+│   └── jaeger/                      # Distributed tracing (OpenTelemetry)
+│       └── config.yml
+│
+└── ── ── ── ── SHARED CONFIGS ── ── ── ── ──
+
+├── shared/
+│   ├── proto/                       # Protobuf schemas (optional, pt gRPC viitor)
+│   │   └── events.proto
+│   └── types/
+│       ├── kafka-events.ts          # TypeScript interfaces pentru Kafka events
+│       └── kafka-events.py          # Pydantic models pentru Kafka events (Python services)
+│
+└── k8s/                             # Kubernetes manifests (pt productie pe cloud)
+    ├── namespaces/
+    ├── deployments/                 # Deployment per serviciu
+    ├── services/                    # ClusterIP / LoadBalancer per serviciu
+    ├── ingress/                     # NGINX Ingress Controller
+    ├── configmaps/
+    ├── secrets/                     # Sealed Secrets (Bitnami)
+    └── hpa/                         # HorizontalPodAutoscaler pt AI agents
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ TECH STACK PER CONTAINER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────┬──────────────────────────────────┬────────────────────────────────────────┐
+│ Container                       │ Tech Stack                       │ Motivatie                              │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ frontend                        │ Next.js 14, TypeScript,          │ SSR/SSG pt SEO, App Router,            │
+│                                 │ Tailwind, Zustand, shadcn/ui     │ Server Components = performanta maxima │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ api-gateway                     │ Node.js 20, Fastify, TypeScript  │ Fastify e 2x mai rapid decat Express;  │
+│                                 │ Pino logger, JWT RS256           │ built-in schema validation (Ajv)       │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ user-service                    │ Node.js 20, Fastify, Prisma ORM  │ TypeScript end-to-end; Prisma genereaza│
+│                                 │ PostgreSQL 16, bcrypt            │ tipuri din schema -> zero drift        │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ cv-service                      │ Python 3.12, FastAPI,            │ Python cel mai bun pt NLP/OCR;         │
+│                                 │ pdfplumber, pytesseract, boto3   │ FastAPI async nativ, auto Swagger docs │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ job-scraper-service             │ Python 3.12, Playwright,         │ Playwright suporta JS-rendered pages;  │
+│                                 │ BeautifulSoup4, Celery, Redis    │ Celery pt task queue distribuit        │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ notification-service            │ Node.js 20, Fastify, Nodemailer  │ Lightweight; SSE pt real-time          │
+│                                 │ Web Push, SSE                    │ progress updates catre frontend        │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ agent-orchestrator              │ Python 3.12, FastAPI, LangGraph  │ LangGraph = state machine pt           │
+│                                 │ Anthropic SDK, kafka-python      │ multi-agent workflows complexe         │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ cv-analyzer-agent               │ Python 3.12, LangChain,         │ Claude Sonnet 4.6 pt analiza           │
+│                                 │ Anthropic API, Qdrant Client     │ nuantata; Qdrant pt RAG semantic       │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ learning-path-agent             │ Python 3.12, Anthropic API,      │ Claude genereaza curriculum custom;    │
+│                                 │ Udemy API, YouTube Data API      │ integreaza resurse externe reale       │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ job-match-agent                 │ Python 3.12, Qdrant Client,      │ Semantic matching > keyword matching;  │
+│                                 │ Anthropic API                    │ LLM reranker pt precizie top-10        │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ hr-interview-agent              │ Python 3.12, FastAPI WebSocket,  │ WebSocket pt chat real-time;           │
+│                                 │ Anthropic API, Redis             │ Redis pastreaza starea conversatiei    │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ technical-interview-agent       │ Python 3.12, FastAPI WebSocket,  │ Judge0 = executie cod sigura           │
+│                                 │ Anthropic API, Judge0 API        │ in sandbox (40+ limbaje)               │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ postgres                        │ PostgreSQL 16                    │ ACID transactions pt date critice      │
+│                                 │                                  │ (useri, plati, progress, certificates) │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ redis                           │ Redis 7 + RedisJSON              │ Submilisecunda; multi-purpose:         │
+│                                 │                                  │ cache, sessions, rate limit, BullMQ    │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ qdrant                          │ Qdrant 1.9 (Rust)                │ Vector DB open-source cel mai rapid;   │
+│                                 │                                  │ HNSW index, filtru metadata, cloud     │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ kafka                           │ Apache Kafka 3.7 + Zookeeper     │ Event streaming durabil, replay-able;  │
+│                                 │                                  │ partitionare pt scalare orizontala     │
+├─────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────────┤
+│ minio                           │ MinIO RELEASE.2024               │ S3-compatible self-hosted;             │
+│                                 │                                  │ stocare CVuri, materiale cursuri       │
+└─────────────────────────────────┴──────────────────────────────────┴────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ DATA FLOW — CELE 3 FLUXURI PRINCIPALE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+════════════════════════════════════════════════════════════════
+ FLOW 1 — CANDIDAT PUTERNIC (Scor CV >= 70/100)
+════════════════════════════════════════════════════════════════
+
+  [User Browser]
+       │  POST /api/cv/upload (multipart/form-data)
+       ▼
+  [API Gateway]  ──verify JWT──►  [User Service / Redis session check]
+       │
+       ▼
+  [CV Service]
+       │  1. Parseaza PDF/DOCX cu pdfplumber sau OCR (pytesseract)
+       │  2. Stocheaza fisierul brut in MinIO bucket "cvs-raw"
+       │  3. Publica eveniment pe Kafka topic: "cv.uploaded"
+       │     Payload: { user_id, cv_text, minio_path, timestamp }
+       │
+       ▼  [Kafka: topic cv.uploaded]
+       │
+  [CV Analyzer Agent]  ◄── Consumer "cv.uploaded"
+       │  1. Extrage skills, experienta, educatie cu LLM (Claude Sonnet 4.6)
+       │  2. Genereaza embedding (OpenAI text-embedding-3-small, 1536 dim)
+       │  3. Stocheaza embedding in Qdrant collection "cv_embeddings"
+       │  4. Scoreaza CV 0-100 (prompt specializat de scoring)
+       │  5. Publica "cv.analyzed" { user_id, score: 82, skills: [...], gaps: [] }
+       │
+       ▼  [Kafka: topic cv.analyzed]
+       │
+  [Agent Orchestrator]  ◄── Consumer "cv.analyzed"
+       │  Router: score >= 70 ──► FLOW 1 (candidat ready)
+       │  1. Declanseaza Job Scraper Service
+       │  2. Trimite HTTP POST catre job-scraper-service/scrape/trigger
+       │     { user_id, skills: ["Python", "FastAPI", "Docker"], seniority: "Mid" }
+       │
+       ▼
+  [Job Scraper Service]
+       │  1. Playwright scrape LinkedIn Jobs + Indeed + eJobs cu filtrele primite
+       │  2. Deduplicare URL hash
+       │  3. Stocheaza joburi brute in PostgreSQL tabela "scraped_jobs"
+       │  4. Publica "jobs.scraped" { user_id, jobs: [{title, url, description}...] }
+       │
+       ▼  [Kafka: topic jobs.scraped]
+       │
+  [Job Match Agent]  ◄── Consumer "jobs.scraped"
+       │  1. Genereaza embedding pentru fiecare job description
+       │  2. Indexeaza joburi in Qdrant collection "job_embeddings"
+       │  3. Cosine similarity: CV embedding vs Job embeddings
+       │  4. LLM reranker (Claude): top 10 cele mai potrivite joburi
+       │  5. Genereaza cover letter personalizat per job cu LLM
+       │  6. Salveaza matches in PostgreSQL tabela "job_matches"
+       │  7. Publica "jobs.matched" { user_id, top_jobs: [...] }
+       │
+       ▼  [Kafka: topic jobs.matched]
+       │
+  [Notification Service]  ◄── Consumer "jobs.matched"
+       │  1. Trimite SSE catre frontend (progress update: "Joburile tale sunt gata!")
+       │  2. Trimite email cu rezumatul top 10 jobs
+       │
+       ▼
+  [User Browser]
+       └── Dashboard afiseaza: scor CV, top 10 job matches, cover letters generate
+
+
+════════════════════════════════════════════════════════════════
+ FLOW 2 — CANDIDAT CU GAPS (Scor CV < 70/100)
+════════════════════════════════════════════════════════════════
+
+  [dupa CV Analyzer Agent — "cv.analyzed" cu score: 45, gaps: ["Docker", "AWS", "System Design"]]
+       │
+       ▼  [Kafka: topic cv.analyzed]
+       │
+  [Agent Orchestrator]  ◄── Consumer "cv.analyzed"
+       │  Router: score < 70 ──► FLOW 2 (needs preparation)
+       │  Publica "gaps.identified" { user_id, gaps: ["Docker","AWS","System Design"],
+       │                              current_level: "Junior", target_role: "Mid Backend Dev" }
+       │
+       ▼  [Kafka: topic gaps.identified]
+       │
+  [Learning Path Agent]  ◄── Consumer "gaps.identified"
+       │  1. LLM (Claude): genereaza plan invatare structurat pe saptamani
+       │     - Saptamana 1-2: Docker fundamentals
+       │     - Saptamana 3-4: AWS EC2, S3, RDS, IAM
+       │     - Saptamana 5-6: System Design patterns
+       │  2. Cauta cursuri Udemy via API (filtre: rating > 4.5, durata < 20h)
+       │  3. Cauta tutoriale YouTube (keywords per gap)
+       │  4. Genereaza quizuri validare cunostinte (10 intrebari per modul)
+       │  5. Salveaza learning path in PostgreSQL tabela "learning_paths"
+       │  6. Publica "learning.path.created" { user_id, modules: [...] }
+       │
+       ▼  [Kafka: topic learning.path.created]
+       │
+  [Notification Service]
+       │  SSE + Email: "Planul tau de invatare e gata! Incepe acum"
+       │
+       ▼
+  [User Browser — pagina /learning/path]
+       │  Utilizatorul parcurge modulele, da quizuri
+       │
+       ▼
+  [User Service]
+       │  PUT /progress — actualizeaza progres in PostgreSQL
+       │  Cand toate modulele sunt completate (progress = 100%):
+       │  Publica "learning.completed" { user_id }
+       │
+       ▼  [Kafka: topic learning.completed]
+       │
+  [Agent Orchestrator]  ◄── Consumer "learning.completed"
+       └── Declanseaza automat FLOW 3 (Interview Prep)
+
+
+════════════════════════════════════════════════════════════════
+ FLOW 3 — SIMULARE INTERVIU (dupa Flow 1 sau Flow 2)
+════════════════════════════════════════════════════════════════
+
+  [User Browser — pagina /interview/hr]
+       │  WebSocket connect: ws://api-gateway/ws/hr-interview/{session_id}
+       │
+       ▼
+  [API Gateway]  ──WebSocket Proxy──►  [HR Interview Agent]
+       │
+  [HR Interview Agent]
+       │  1. Incarca context utilizator din PostgreSQL (CV, skills, job target)
+       │  2. Initializeaza persona HR in Redis: { session_id, history: [], persona: "Google HR" }
+       │  3. LLM (Claude cu system prompt HR persona):
+       │     - Pune intrebari comportamentale: "Tell me about yourself"
+       │     - Intrebari motivationale, salary expectations, culture fit
+       │  4. Fiecare raspuns al userului → LLM analiza in timp real → scor partial
+       │  5. La sfarsit (15-20 intrebari):
+       │     - LLM genereaza feedback detaliat (puncte forte / de imbunatatit)
+       │     - Salveaza sesiunea in PostgreSQL tabela "interview_sessions"
+       │     - Publica "interview.hr.completed" { user_id, score, feedback }
+       │
+       ▼
+  [User Browser — pagina /interview/technical]
+       │  WebSocket connect: ws://api-gateway/ws/tech-interview/{session_id}
+       │
+       ▼
+  [API Gateway]  ──WebSocket Proxy──►  [Technical Interview Agent]
+       │
+  [Technical Interview Agent]
+       │  1. Selecteaza probleme bazate pe stack-ul candidatului (Python + System Design)
+       │  2. LLM (Claude cu persona Senior Dev):
+       │     - Prezinta problema algoritmică (ex: "Implement LRU Cache")
+       │     - Pune intrebari de System Design ("Design Twitter's feed")
+       │  3. Candidatul scrie cod in Monaco Editor → trimis via WebSocket
+       │  4. Cod trimis la Judge0 API → executie in sandbox → rezultat teste
+       │  5. LLM analizeaza: Big-O complexity, edge cases, code quality
+       │  6. Feedback in timp real + scor final
+       │  7. Salveaza in PostgreSQL, publica "interview.tech.completed"
+       │
+       ▼  [Kafka: topic interview.*.completed]
+       │
+  [Notification Service]
+       └── Email: Raport complet interviu (scor HR + scor Tehnic + recomandari)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ DATA LAYER — CARE SERVICIU FOLOSESTE CE BAZA DE DATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ PostgreSQL (date relationale, tranzactionale, ACID)
+ ├── user-service        → tabele: users, profiles, sessions, progress
+ ├── cv-service          → tabele: cv_uploads (metadata, status, minio_path)
+ ├── job-scraper-service → tabele: scraped_jobs, scraping_runs
+ ├── job-match-agent     → tabele: job_matches (user_id, job_id, score, cover_letter)
+ ├── learning-path-agent → tabele: learning_paths, learning_modules, quiz_attempts
+ └── interview agents    → tabele: interview_sessions, interview_feedback
+
+ Qdrant Vector DB (semantic search, RAG)
+ ├── cv-analyzer-agent   → collection: cv_embeddings  (1 vector/CV, metadata: user_id, skills[])
+ ├── job-match-agent     → collection: job_embeddings (1 vector/job, metadata: title, company, url)
+ └── learning-path-agent → collection: course_embeddings (optional, pt matching cursuri)
+
+ Redis (ephemeral, sub-milisecunda)
+ ├── api-gateway         → rate limiting counters (key: ip:endpoint, TTL: 60s)
+ ├── user-service        → JWT blacklist (key: jti, TTL: token expiry)
+ ├── hr-interview-agent  → conversation history (key: session_id, TTL: 2h)
+ ├── tech-interview-agent→ interview state (key: session_id, TTL: 2h)
+ └── job-scraper-service → Celery broker + result backend
+
+ MinIO (object storage, fisiere binare)
+ ├── cv-service          → bucket: cvs-raw (CV-urile originale uploadate)
+ ├── cv-service          → bucket: cvs-processed (CV-uri dupa OCR/parsing)
+ └── learning-path-agent → bucket: course-materials (PDFuri, imagini cursuri)
+
+ Kafka (event streaming, comunicare async intre servicii)
+ └── Topics cu retentie 7 zile, 3 replici in productie:
+     ├── user.registered        (user-service → notification-service)
+     ├── cv.uploaded            (cv-service → cv-analyzer-agent)
+     ├── cv.analyzed            (cv-analyzer-agent → agent-orchestrator)
+     ├── gaps.identified        (agent-orchestrator → learning-path-agent)
+     ├── jobs.scraped           (job-scraper-service → job-match-agent)
+     ├── jobs.matched           (job-match-agent → notification-service)
+     ├── learning.path.created  (learning-path-agent → notification-service)
+     ├── learning.completed     (user-service → agent-orchestrator)
+     ├── interview.hr.completed (hr-interview-agent → notification-service)
+     └── interview.tech.completed (tech-interview-agent → notification-service)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ DOCKER COMPOSE — NETWORK & PORTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Networks (toate containerele pe reteaua interna "careerpath-network"):
+ ├── public-net    → frontend ↔ api-gateway (singura expusa pe host)
+ └── internal-net  → toate serviciile interne (fara acces direct din exterior)
+
+ Port Mapping (host:container):
+ ├── 3000:3000   → frontend (Next.js dev server)
+ ├── 8000:8000   → api-gateway (singura intrare publica)
+ ├── 8001:8001   → user-service (intern)
+ ├── 8002:8002   → cv-service (intern)
+ ├── 8003:8003   → job-scraper-service (intern)
+ ├── 8004:8004   → notification-service (intern)
+ ├── 8005:8005   → agent-orchestrator (intern)
+ ├── 8006:8006   → cv-analyzer-agent (intern)
+ ├── 8007:8007   → learning-path-agent (intern)
+ ├── 8008:8008   → job-match-agent (intern)
+ ├── 8009:8009   → hr-interview-agent (intern)
+ ├── 8010:8010   → technical-interview-agent (intern)
+ ├── 5432:5432   → postgres (localhost only, dev)
+ ├── 6379:6379   → redis (localhost only, dev)
+ ├── 6333:6333   → qdrant HTTP API
+ ├── 9092:9092   → kafka broker
+ ├── 9000:9000   → minio API
+ ├── 9001:9001   → minio Console UI
+ └── 8080:8080   → kafka-ui
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SECURITATE — BEST PRACTICES IMPLEMENTATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ ✔  JWT RS256 (cheie privata/publica) — nu HS256 cu secret simetric
+ ✔  API Gateway = singurul serviciu expus public (Zero Trust interne)
+ ✔  Rate limiting per IP la gateway (fastify-rate-limit)
+ ✔  CV-uri stocate in MinIO cu presigned URLs (expira in 15 min)
+ ✔  Secretele in .env (niciodata hardcodate) — Vault in productie
+ ✔  Docker Compose: health checks pe toate serviciile
+ ✔  Non-root user in toate Dockerfile-urile (USER node / USER appuser)
+ ✔  Judge0 sandbox executie cod (izolat de infrastructura principala)
+ ✔  CORS restrictiv (whitelist origins)
+ ✔  Input validation cu Pydantic (Python) si Ajv (Node.js/Fastify)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SCALARE — DE LA DEV LA PRODUCTIE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Development:    docker compose up -d           (un singur nod, toate serviciile)
+ Staging:        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+ Productie:      kubectl apply -f k8s/          (Kubernetes pe AWS EKS / GKE)
+
+ Servicii cu auto-scaling (HPA in K8s):
+ ├── cv-analyzer-agent     → scale 2-10 replici (CPU > 70% sau Kafka lag > 100)
+ ├── job-scraper-service   → scale 2-8 replici  (CPU > 60%)
+ ├── job-match-agent       → scale 2-6 replici
+ ├── hr-interview-agent    → scale 2-10 replici (WebSocket connections > 50/pod)
+ └── technical-interview-agent → scale 2-10 replici
+
+ Kafka Consumer Groups (fiecare serviciu e consumer group separat):
+ └── Adaugand replici la un serviciu -> Kafka redistribuie partitiile automat
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SUMMARY — IMBUNATATIRI FATA DE DRAFT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Draft → Arhitectura Noua:
+
+ 1. "backend/" monolith      →  5 servicii separate (gateway, user, cv, scraper, notification)
+ 2. "ai-service/" monolith   →  5 agenti AI specializati + 1 orchestrator (LangGraph)
+ 3. HTTP sincrona peste tot  →  Kafka event-driven async pt toate task-urile grele
+ 4. Fara object storage      →  MinIO pt CVuri si materiale de curs (scalabil, S3-API)
+ 5. "vector-db-config/" goala→  Qdrant cu 3 collectii definite clar + rolluri clare per agent
+ 6. Fara Redis               →  Redis pt sessions, rate limit, Celery broker, interview state
+ 7. Fara observabilitate     →  Prometheus + Grafana + Jaeger (traces distributed)
+ 8. Fara Kubernetes          →  Manifeste K8s complete cu HPA pt AI agents
+ 9. Fara securitate clara    →  JWT RS256, Zero Trust, presigned URLs, non-root containers
+10. Fara scraping specializat→  Playwright pt LinkedIn/Indeed + scrapers pt eJobs.ro/BestJobs

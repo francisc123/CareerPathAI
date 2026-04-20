@@ -1,0 +1,67 @@
+version: "3.9"
+
+# Production overrides: resource limits, replicas, no port exposure for internal services
+
+services:
+  frontend:
+    build:
+      target: production
+    environment:
+      - NODE_ENV=production
+
+  api-gateway:
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  cv-analyzer-agent:
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  job-scraper-service:
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  hr-interview-agent:
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  technical-interview-agent:
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  agent-orchestrator:
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  postgres:
+    ports: []
+
+  redis:
+    ports: []
+
+  kafka:
+    ports: []

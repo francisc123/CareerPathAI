@@ -1,0 +1,22 @@
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+
+# LLM
+anthropic==0.30.0        # Claude Sonnet 4.6 — primary model for CV analysis
+openai==1.35.13          # text-embedding-3-small for vector embeddings
+
+# Vector DB
+qdrant-client==1.10.0
+
+# Messaging
+aiokafka==0.11.0
+
+# DB
+asyncpg==0.29.0          # Async PostgreSQL driver (fastest Python PG driver)
+sqlalchemy[asyncio]==2.0.31
+
+# Observability
+opentelemetry-api==1.25.0
+opentelemetry-sdk==1.25.0
+prometheus-fastapi-instrumentator==7.0.0

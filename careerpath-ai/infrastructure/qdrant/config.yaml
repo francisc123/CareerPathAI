@@ -1,0 +1,20 @@
+# CareerPath AI — Qdrant Vector DB Configuration
+
+storage:
+  storage_path: /qdrant/storage
+  snapshots_path: /qdrant/snapshots
+
+service:
+  host: 0.0.0.0
+  http_port: 6333
+  grpc_port: 6334
+  max_request_size_mb: 32
+
+# Collections are created at service startup via init scripts
+# cv_embeddings   — dim: 1536, metric: Cosine  (OpenAI text-embedding-3-small)
+# job_embeddings  — dim: 1536, metric: Cosine
+# course_embeddings — dim: 1536, metric: Cosine
+
+telemetry_disabled: true
+
+log_level: INFO
