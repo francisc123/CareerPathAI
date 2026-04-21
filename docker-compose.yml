@@ -6,6 +6,7 @@ x-springboot-svc: &springboot-svc
     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/platformdb
     - SPRING_DATA_REDIS_HOST=redis
     - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+    - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health
   healthcheck:
     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
     interval: 20s
@@ -24,6 +25,7 @@ x-ai-agent: &ai-agent
     - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
     - QDRANT_URL=http://qdrant:6333
     - GEMINI_API_KEY=${GEMINI_API_KEY}
+    - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health
   depends_on:
     redpanda: { condition: service_healthy }
     qdrant: { condition: service_healthy }
@@ -33,7 +35,7 @@ networks:
     driver: bridge
   internal-net:
     driver: bridge
-    internal: true
+    internal: false  # Modificat din true in false pentru a permite port mapping
 
 volumes:
   postgres_data:
@@ -45,15 +47,19 @@ volumes:
   grafana_data:
 
 services:
-  # INFRASTRUCTURA
+  # === INFRASTRUCTURA ===
   postgres:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: platformdb
-    volumes: [postgres_data:/var/lib/postgresql/data]
-    networks: [internal-net]
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d platformdb"]
       interval: 10s
@@ -69,6 +75,8 @@ services:
 
   qdrant:
     image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
     volumes: [qdrant_data:/qdrant/storage]
     networks: [internal-net]
     healthcheck:
@@ -114,7 +122,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
 
-  # OBSERVABILITATE
+  # === OBSERVABILITATE ===
   otel-collector:
     image: otel/opentelemetry-collector:latest
     networks: [internal-net]
@@ -130,7 +138,7 @@ services:
     networks: [public-net, internal-net]
     ports: ["3000:3000"]
 
-  # MICROSERVICII CORE
+  # === MICROSERVICII CORE ===
   user-service: { <<: *springboot-svc, image: careerpath/user-service:latest }
   cv-service:
     <<: *springboot-svc
@@ -141,7 +149,7 @@ services:
   job-scraper-service: { <<: *springboot-svc, image: careerpath/job-scraper:latest }
   notification-service: { <<: *springboot-svc, image: careerpath/notifications:latest }
 
-  # AGENTI AI (Folosesc Gemini prin API, deci resurse putine)
+  # === AGENTI AI ===
   cv-analyzer-agent: { <<: *ai-agent, image: careerpath/cv-analyzer:latest }
   learning-path-agent: { <<: *ai-agent, image: careerpath/learning-path:latest }
   job-match-agent: { <<: *ai-agent, image: careerpath/job-match:latest }
@@ -155,7 +163,7 @@ services:
       cv-analyzer-agent: { condition: service_healthy }
       learning-path-agent: { condition: service_healthy }
 
-  # GATEWAY & FRONTEND
+  # === GATEWAY & FRONTEND ===
   api-gateway:
     <<: *springboot-svc
     image: careerpath/api-gateway:latest
