@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   api-gateway:
     deploy:
@@ -12,7 +11,7 @@ services:
       resources:
         limits: { cpus: '0.5', memory: 512M }
 
-  # Agenti AI 
+  # Agenti AI
   cv-analyzer-agent:
     deploy:
       resources:
