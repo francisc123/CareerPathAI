@@ -1,0 +1,24 @@
+services:
+  api-gateway:
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: '0.5', memory: 512M }
+
+  user-service:
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: '0.5', memory: 512M }
+
+  # Agenti AI
+  #
+  cv-analyzer-agent:
+    deploy:
+      resources:
+        limits: { cpus: '0.3', memory: 512M }
+
+  postgres:
+    deploy:
+      resources:
+        limits: { cpus: '1.0', memory: 1G }
