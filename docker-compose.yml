@@ -164,6 +164,7 @@ services:
       learning-path-agent: { condition: service_healthy }
 
   # === GATEWAY & FRONTEND ===
+  #
   api-gateway:
     <<: *springboot-svc
     image: careerpath/api-gateway:latest

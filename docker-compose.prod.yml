@@ -12,6 +12,7 @@ services:
         limits: { cpus: '0.5', memory: 512M }
 
   # Agenti AI
+  #
   cv-analyzer-agent:
     deploy:
       resources:
