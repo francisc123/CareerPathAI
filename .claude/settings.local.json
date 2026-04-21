@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(py|yml|yaml\\)$\")",
+      "Bash(pip install *)",
+      "Bash(python cv_scoring.py)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
