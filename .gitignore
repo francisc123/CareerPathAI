@@ -1,0 +1,25 @@
+# Java / Spring Boot
+target/
+*.class
+*.jar
+.mvn/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Secretelor (FOARTE IMPORTANT)
+.env
+
+# Datele persistente ale bazelor de date (nu vrem sa urcam GB de date pe repo)
+postgres_data/
+redis_data/
+qdrant_data/
+redpanda_data/
+minio_data/
+prometheus_data/
+grafana_data/
+
+# OS
+.DS_Store
