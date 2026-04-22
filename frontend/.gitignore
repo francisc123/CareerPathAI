@@ -28,6 +28,26 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# Editor folders
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+
+# Prettier config
+.prettierrc
+.prettierrc.js
+.prettierrc.json
+.prettierrc.yaml
+.prettierrc.yml
+.prettierrc.toml
+prettier.config.js
+prettier.config.cjs
+
+# Stray/corrupted files
+setTimeout(resolve
+
 # vercel
 .vercel
 
