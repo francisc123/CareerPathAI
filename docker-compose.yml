@@ -1,0 +1,181 @@
+x-springboot-svc: &springboot-svc
+  networks:
+    - internal-net
+  environment:
+    - SPRING_PROFILES_ACTIVE=docker
+    - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/platformdb
+    - SPRING_DATA_REDIS_HOST=redis
+    - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+    - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+    interval: 20s
+    timeout: 5s
+    retries: 5
+    start_period: 40s
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    redpanda: { condition: service_healthy }
+
+x-ai-agent: &ai-agent
+  <<: *springboot-svc
+  environment:
+    - SPRING_PROFILES_ACTIVE=docker
+    - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+    - QDRANT_URL=http://qdrant:6333
+    - GEMINI_API_KEY=${GEMINI_API_KEY}
+    - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health
+  depends_on:
+    redpanda: { condition: service_healthy }
+    qdrant: { condition: service_healthy }
+
+networks:
+  public-net:
+    driver: bridge
+  internal-net:
+    driver: bridge
+    internal: false  # Modificat din true in false pentru a permite port mapping
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  redpanda_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+  # === INFRASTRUCTURA ===
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: platformdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d platformdb"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes: [redis_data:/data]
+    networks: [internal-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes: [qdrant_data:/qdrant/storage]
+    networks: [internal-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 10s
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp 1
+      - --memory 512M
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --check=false
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9644/v1/status/ready"]
+      interval: 10s
+      retries: 10
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    environment: { KAFKA_BROKERS: redpanda:9092 }
+    networks: [public-net, internal-net]
+    ports: ["8080:8080"]
+    depends_on: { redpanda: { condition: service_healthy } }
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes: [minio_data:/data]
+    networks: [internal-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+
+  # === OBSERVABILITATE ===
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    networks: [internal-net]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes: [prometheus_data:/prometheus]
+    networks: [internal-net]
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes: [grafana_data:/var/lib/grafana]
+    networks: [public-net, internal-net]
+    ports: ["3000:3000"]
+
+  # === MICROSERVICII CORE ===
+  user-service: { <<: *springboot-svc, image: careerpath/user-service:latest }
+  cv-service:
+    <<: *springboot-svc
+    image: careerpath/cv-service:latest
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+  job-scraper-service: { <<: *springboot-svc, image: careerpath/job-scraper:latest }
+  notification-service: { <<: *springboot-svc, image: careerpath/notifications:latest }
+
+  # === AGENTI AI ===
+  cv-analyzer-agent: { <<: *ai-agent, image: careerpath/cv-analyzer:latest }
+  learning-path-agent: { <<: *ai-agent, image: careerpath/learning-path:latest }
+  job-match-agent: { <<: *ai-agent, image: careerpath/job-match:latest }
+  hr-interview-agent: { <<: *ai-agent, image: careerpath/hr-interview:latest }
+  technical-interview-agent: { <<: *ai-agent, image: careerpath/tech-interview:latest }
+
+  agent-orchestrator:
+    <<: *springboot-svc
+    image: careerpath/orchestrator:latest
+    depends_on:
+      cv-analyzer-agent: { condition: service_healthy }
+      learning-path-agent: { condition: service_healthy }
+
+  # === GATEWAY & FRONTEND ===
+  #
+  api-gateway:
+    <<: *springboot-svc
+    image: careerpath/api-gateway:latest
+    networks: [public-net, internal-net]
+    ports: ["80:8080"]
+    depends_on:
+      user-service: { condition: service_healthy }
+      agent-orchestrator: { condition: service_healthy }
+
+  frontend:
+    image: nginx:alpine
+    networks: [public-net]
+    ports: ["8081:80"]
+    depends_on: { api-gateway: { condition: service_healthy } }
