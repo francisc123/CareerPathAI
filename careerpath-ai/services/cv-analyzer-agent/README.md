@@ -1,11 +1,112 @@
 # CV Analyzer Agent
 
-Primul agent AI din platforma CareerPath. Primeste un CV brut, il analizeaza cu Gemini,
-genereaza un scor si identifica lipsurile, apoi publica rezultatul pentru ceilalti agenti.
+**Rolul sau in arhitectura:** Este un Worker invizibil pentru utilizator.
+Nu vorbeste cu nimeni. Primeste o sarcina, o executa, raporteaza rezultatul.
 
 ---
 
-## Cum functioneaza (citeste asta primul)
+## Arhitectura in doua straturi — citeste asta PRIMUL
+
+Cel mai important lucru de inteles inainte de orice linie de cod:
+
+```
+STRATUL 1 — Conversational Agent (agent-orchestrator)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Vorbeste cu utilizatorul.
+  Construieste profilul din conversatie naturala (Shadow Profiling).
+  Decide CAND sa apeleze uneltele din fundal.
+  
+  Exemplu de conversatie:
+  Agent: "Buna! Spune-mi, cu ce te ocupi in prezent?"
+  User:  "Sunt developer Python, lucrez de 2 ani."
+  Agent: [in fundal: extrage {seniority: "junior", skills: ["Python"]}]
+  Agent: "Super! Ai un CV pe care sa mi-l trimiti?"
+  User:  [uploadeaza CV]
+  Agent: [APELEAZA UNEALTA: analizeaza_cv] ← declanseaza Stratul 2
+  Agent: "Am analizat CV-ul. Vad ca stii Python solid, dar..."
+
+STRATUL 2 — CV Analyzer Agent (acest serviciu)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NU vorbeste cu utilizatorul. Niciodata.
+  Primeste eveniment pe Redpanda → executa → returneaza rezultat.
+  Este o unealta invizibila, ca un motor in masina.
+```
+
+**De ce aceasta separare?**
+Conversatia si procesarea sunt doua probleme complet diferite.
+Daca le pui in acelasi loc, codul devine imposibil de intretinut.
+Daca le separi, poti schimba modelul AI din Stratul 2 fara sa atingi conversatia.
+
+---
+
+## Cum comunica cele doua straturi
+
+```
+[Utilizator] ←→ [agent-orchestrator] ←→ [Redpanda] ←→ [cv-analyzer-agent]
+                      │                                         │
+                      │ publica "cv.uploaded"                   │
+                      │ ─────────────────────────────────────► │
+                      │                                         │ analizeaza
+                      │                                         │ cu Gemini
+                      │ primeste "cv.analyzed"                  │
+                      │ ◄───────────────────────────────────── │
+                      │
+                      │ continua conversatia cu utilizatorul
+                      │ "Scorul tau e 74, hai sa vedem..."
+```
+
+Redpanda e "cutia postala" dintre cei doi agenti.
+Niciodata nu se apeleaza direct unul pe celalalt.
+
+---
+
+## Shadow Profiling — profilare invizibila
+
+In timp ce conversatia curge natural, orchestratorul construieste un profil
+JSON in fundal fara ca utilizatorul sa simta ca este evaluat:
+
+```json
+{
+  "nume": null,
+  "seniority": null,
+  "skills": [],
+  "personalitate": null,
+  "facultate": null,
+  "cv_score": null,
+  "gaps": []
+}
+```
+
+Dupa fiecare mesaj al utilizatorului, modelul AI extrage entitati si
+completeaza campurile. Cand profilul e complet, orchestratorul stie
+ca poate trimite utilizatorul catre agentii RAG.
+
+**Concept de studiat:** `"entity extraction with LLMs"` si `"function calling"`
+
+---
+
+## Validarea conversationala a CV-ului
+
+Dupa ce cv-analyzer-agent returneaza scorul, orchestratorul nu il
+spune direct. Il VALIDEAZA mai intai prin conversatie:
+
+```
+CV zice: "Senior React Developer"
+Scor Gemini: 62/100
+
+Orchestrator: "Super, am vazut ca ai multa experienta pe React.
+               Apropo, cum gestionezi re-randarile costisitoare
+               in proiectele mari?"
+
+User raspunde vag → scorul real e probabil 55, nu 62
+User raspunde detaliat → scorul e confirmat
+```
+
+Asta face profilul mult mai precis decat orice analiza automata.
+
+---
+
+## Cum functioneaza CV Analyzer Agent (worker-ul)
 
 ```
 [Redpanda] → consumer.py aude "cv.uploaded"
