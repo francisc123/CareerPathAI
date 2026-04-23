@@ -1,130 +1,132 @@
-from google import genai
+import sys
 import os
 import json
+import re
+from google import genai
 from dotenv import load_dotenv
+
+sys.stdout.reconfigure(encoding="utf-8")
 
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-CV_SCORING_SYSTEM_PROMPT = """
-You are a senior technical recruiter with 15 years of experience. Analyze the CV and return ONLY a valid JSON object with no extra text.
+CV_SAMPLES = {
+    "junior": """
+    Ana Popescu
+    Student an 3, Facultatea de Matematica-Informatica, Universitatea Babes-Bolyai
+    Skills: Python, HTML, CSS, JavaScript, Git
+    Proiecte: Aplicatie web To-Do List (HTML/CSS/JS, proiect universitar)
+               Calculator BMI in Python (tema de curs)
+    Experienta: stagiu 2 luni la o firma locala de web design (WordPress)
+    """,
 
-Scoring rubric (total 100 points):
-- Years of experience: 0-30 pts (0-1yr=5, 1-2yr=12, 2-4yr=20, 4-7yr=26, 7+yr=30)
-- Skill stack relevance: 0-25 pts (modern/in-demand technologies score higher)
-- Project quality: 0-20 pts (real-world impact, complexity, ownership)
-- Education: 0-15 pts (CS degree=15, bootcamp=8, self-taught=5)
-- Certifications: 0-10 pts (cloud/industry certs)
+    "mid": """
+    Rares Constantinescu
+    Python Developer — 2 ani experienta
+    Skills: Python, FastAPI, PostgreSQL, Docker
+    Proiecte: API REST pentru platforma e-commerce (500 useri activi)
+    Educatie: Universitatea Politehnica Bucuresti, Calculatoare, anul 2
+    """,
 
-Return exactly this JSON structure:
-{
-  "score": <integer 0-100>,
-  "seniority": <"junior"|"mid"|"senior">,
-  "skills": [<list of identified skills>],
-  "strengths": [<list of 2-4 key strengths>],
-  "gaps": [<list of 2-4 missing skills or weaknesses>],
-  "target_role": <"suggested job title">
+    "senior": """
+    Mihai Ionescu
+    Senior Software Engineer — 9 ani experienta
+    Skills: Python, Go, Kubernetes, AWS (EKS, RDS, S3, Lambda), Terraform, PostgreSQL,
+            Redis, Kafka, Docker, CI/CD (GitHub Actions, ArgoCD), gRPC, REST, Prometheus, Grafana
+    Experienta:
+      - Tech Lead la startup fintech (echipa 6 dev): arhitectat sistemul de procesare plati
+        (500k tranzactii/zi, latenta p99 < 80ms)
+      - Senior Engineer la companie SaaS: migrat monolith Rails la microservicii Go,
+        redus costurile de infrastructura cu 40%
+    Educatie: Masterat Sisteme Distribuite, Politehnica Bucuresti
+    Certificari: AWS Solutions Architect Professional, CKA (Certified Kubernetes Administrator)
+    """,
+
+    "career_changer": """
+    Elena Dumitrescu
+    Fost profesor de matematica, 6 ani. Reconversie profesionala catre IT — 8 luni.
+    Educatie: Licenta Matematica, Universitatea Bucuresti
+    Cursuri absolvite: Python for Everybody (Coursera), CS50 Harvard (online, certificat),
+                       SQL Bootcamp (Udemy)
+    Proiecte personale: Script Python pentru analiza notelor elevilor (pandas, matplotlib)
+                        Dashboard Excel automatizat cu Python openpyxl
+    Skills: Python, SQL (SQLite), pandas, matplotlib, Excel, Git (basic)
+    GitHub: 12 repositorii publice, commits regulate in ultimele 6 luni
+    """,
+
+    "bootcamp": """
+    Andrei Marin
+    Absolvent bootcamp FullStack JavaScript — 4 luni (ProFactor Academy)
+    Skills: JavaScript, TypeScript, React, Node.js, Express, MongoDB, REST APIs,
+            HTML, CSS, Tailwind CSS, Git, GitHub
+    Proiecte:
+      - Platforma de blogging cu autentificare JWT (React + Node + MongoDB, deployed pe Render)
+      - App de gestiune task-uri in timp real cu WebSocket (React + Express + Socket.io)
+      - Clone Trello minimal cu drag-and-drop (React)
+    Educatie: Licenta Drept (nefinalizata, 2 ani)
+    """
 }
-"""
 
-GAP_ANALYSIS_SYSTEM_PROMPT = """
-You are a career development expert. Given a candidate's CV score, skills, and target role, identify skill gaps and create a learning plan.
+with open("../services/cv-analyzer-agent/prompts/cv_scoring.txt", encoding="utf-8") as f:
+    system_prompt = f.read()
 
-Return ONLY a valid JSON object with no extra text:
-{
-  "gaps": [<list of all missing skills for the target role>],
-  "priority_gaps": [<top 3 most critical gaps to address first>],
-  "estimated_weeks_to_close": <integer, realistic weeks to close priority gaps>
-}
-"""
+REQUIRED_KEYS = {"score", "seniority", "skills", "strengths", "gaps", "target_role", "score_breakdown"}
+SCORE_BREAKDOWN_KEYS = {"experience", "skill_stack", "projects", "education", "certifications"}
+VALID_SENIORITY = {"junior", "mid", "senior", "lead"}
 
-cv_samples = [
-    {
-        "label": "Junior Developer",
-        "text": """
-        Name: Alexandru Ionescu
-        Experience: 1 year as junior Python developer at a startup
-        Education: Bachelor in Computer Science, University of Bucharest, 2023
-        Skills: Python, HTML, CSS, basic SQL, Git
-        Projects: Built a personal blog with Flask and SQLite. Contributed to open-source project on GitHub.
-        """
-    },
-    {
-        "label": "Mid Developer",
-        "text": """
-        Name: Maria Constantin
-        Experience: 3 years as backend developer
-        Education: Bachelor in Software Engineering, Politehnica University, 2021
-        Skills: Python, Django, REST APIs, PostgreSQL, Redis, Docker, AWS basics, Git, Linux
-        Projects: Led backend development for an e-commerce platform with 50k users. Built internal analytics dashboard reducing reporting time by 60%.
-        Certifications: AWS Cloud Practitioner
-        """
-    },
-    {
-        "label": "Senior Developer",
-        "text": """
-        Name: Andrei Popescu
-        Experience: 8 years in software engineering, 3 years as tech lead
-        Education: Master in Computer Science, Technical University Cluj, 2016
-        Skills: Python, Go, Kubernetes, Terraform, AWS, GCP, PostgreSQL, Redis, Kafka, Elasticsearch, Docker, CI/CD, System Design
-        Projects: Designed and built microservices platform processing 2M events/day. Led team of 6 engineers. Reduced infrastructure costs by 40% through optimization.
-        Certifications: AWS Solutions Architect Professional, CKA (Kubernetes)
-        """
-    },
-    {
-        "label": "Career Changer",
-        "text": """
-        Name: Elena Dumitrescu
-        Experience: 5 years as marketing manager, 8 months self-learning programming
-        Education: Bachelor in Marketing, Academy of Economic Studies, 2018
-        Skills: Python basics, HTML/CSS, Excel, SQL basics, Google Analytics, Tableau
-        Projects: Built a data dashboard to analyze marketing campaigns using Python and Tableau. Completed Google Data Analytics certificate.
-        Certifications: Google Data Analytics Certificate
-        """
-    },
-    {
-        "label": "Bootcamp Graduate",
-        "text": """
-        Name: Cristian Muresan
-        Experience: No professional experience, completed 6-month bootcamp
-        Education: Full-Stack Web Development Bootcamp, 2024
-        Skills: JavaScript, React, Node.js, Express, MongoDB, HTML, CSS, Git
-        Projects: Capstone project: full-stack task management app with authentication. 3 portfolio projects on GitHub.
-        """
-    }
-]
+all_passed = True
 
+for cv_type, cv_text in CV_SAMPLES.items():
+    print(f"\n{'='*60}")
+    print(f"CV TYPE: {cv_type.upper()}")
+    print('='*60)
 
-def score_cv(cv_text: str) -> dict:
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=f"{CV_SCORING_SYSTEM_PROMPT}\n\nCV to analyze:\n{cv_text}"
+        model="gemini-2.5-flash",
+        contents=f"{system_prompt}\n\nCV TEXT:\n{cv_text}"
     )
-    raw = response.text.strip().strip("```json").strip("```").strip()
-    return json.loads(raw)
 
+    raw = response.text or ""
+    clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
 
-def analyze_gaps(score_result: dict) -> dict:
-    prompt = f"{GAP_ANALYSIS_SYSTEM_PROMPT}\n\nCandidate data:\n{json.dumps(score_result, indent=2)}"
-    response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=prompt
-    )
-    raw = response.text.strip().strip("```json").strip("```").strip()
-    return json.loads(raw)
+    try:
+        result = json.loads(clean)
+    except json.JSONDecodeError as e:
+        print(f"[FAIL] JSON invalid: {e}")
+        print(raw)
+        all_passed = False
+        continue
 
+    errors = []
 
-if __name__ == "__main__":
-    for sample in cv_samples:
-        print(f"\n{'='*60}")
-        print(f"Testing: {sample['label']}")
-        print('='*60)
+    missing_keys = REQUIRED_KEYS - result.keys()
+    if missing_keys:
+        errors.append(f"Campuri lipsa: {missing_keys}")
 
-        score_result = score_cv(sample["text"])
-        print("CV Score Result:")
-        print(json.dumps(score_result, indent=2))
+    score = result.get("score")
+    if not isinstance(score, int) or not (0 <= score <= 100):
+        errors.append(f"score invalid: {score}")
 
-        gap_result = analyze_gaps(score_result)
-        print("\nGap Analysis Result:")
-        print(json.dumps(gap_result, indent=2))
+    if result.get("seniority") not in VALID_SENIORITY:
+        errors.append(f"seniority invalid: {result.get('seniority')}")
+
+    breakdown = result.get("score_breakdown", {})
+    missing_bd = SCORE_BREAKDOWN_KEYS - breakdown.keys()
+    if missing_bd:
+        errors.append(f"score_breakdown campuri lipsa: {missing_bd}")
+    else:
+        total = sum(breakdown.values())
+        if abs(total - score) > 2:
+            errors.append(f"score_breakdown suma ({total}) != score ({score})")
+
+    if errors:
+        print(f"[FAIL] {'; '.join(errors)}")
+        all_passed = False
+    else:
+        print(f"[PASS] score={score}, seniority={result['seniority']}, target={result['target_role']}")
+        print(f"       breakdown: {breakdown}")
+
+print(f"\n{'='*60}")
+print("REZULTAT FINAL:", "TOATE TESTELE TRECUTE" if all_passed else "UNELE TESTE AU ESUAT")
+print('='*60)
