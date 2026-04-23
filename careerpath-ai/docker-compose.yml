@@ -2,8 +2,17 @@ version: "3.9"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CareerPath AI — Docker Compose (Development)
-#  Architecture update: Redpanda replaces Kafka+Zookeeper (no ZK dependency,
-#  Kafka-compatible API, 10x faster, single binary)
+#
+#  PROFILES — porneste doar ce ai nevoie:
+#
+#  Agenti AI (Rares):   docker-compose --profile agents up
+#  Backend (Francis):   docker-compose --profile backend up
+#  Frontend:            docker-compose --profile frontend --profile backend up
+#  Observabilitate:     docker-compose --profile observability up
+#  Tot:                 docker-compose --profile frontend --profile backend --profile agents --profile observability up
+#
+#  Infrastructura (postgres, redis, qdrant, redpanda, minio) porneste MEREU,
+#  indiferent de profile.
 # ─────────────────────────────────────────────────────────────────────────────
 
 x-python-ai: &python-ai-defaults
@@ -45,6 +54,7 @@ services:
     networks: [public-net]
     depends_on: [api-gateway]
     restart: unless-stopped
+    profiles: [frontend]
 
   # ── Layer 2 · API Gateway ──────────────────────────────────────────────────
   api-gateway:
@@ -55,6 +65,7 @@ services:
     networks: [public-net, internal-net]
     depends_on: [user-service]
     restart: unless-stopped
+    profiles: [backend, frontend]
 
   # ── Layer 3 · Core Services ────────────────────────────────────────────────
   user-service:
@@ -65,6 +76,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
+    profiles: [backend, frontend]
 
   cv-service:
     build: ./services/cv-service
@@ -75,12 +87,14 @@ services:
       postgres:  { condition: service_healthy }
       minio:     { condition: service_started }
       redpanda:  { condition: service_healthy }
+    profiles: [backend]
 
   job-scraper-service:
     build: ./services/job-scraper-service
     container_name: cp-job-scraper
     ports: ["8003:8003"]
     <<: *python-ai-defaults
+    profiles: [backend]
 
   notification-service:
     build: ./services/notification-service
@@ -89,6 +103,7 @@ services:
     <<: *node-defaults
     depends_on:
       redpanda: { condition: service_healthy }
+    profiles: [backend]
 
   # ── Layer 4 · AI Agent Services ───────────────────────────────────────────
   agent-orchestrator:
@@ -96,6 +111,7 @@ services:
     container_name: cp-orchestrator
     ports: ["8005:8005"]
     <<: *python-ai-defaults
+    profiles: [agents]
 
   cv-analyzer-agent:
     build: ./services/cv-analyzer-agent
@@ -104,12 +120,14 @@ services:
     <<: *python-ai-defaults
     depends_on:
       qdrant:   { condition: service_started }
+    profiles: [agents]
 
   learning-path-agent:
     build: ./services/learning-path-agent
     container_name: cp-learning-agent
     ports: ["8007:8007"]
     <<: *python-ai-defaults
+    profiles: [agents]
 
   job-match-agent:
     build: ./services/job-match-agent
@@ -118,20 +136,23 @@ services:
     <<: *python-ai-defaults
     depends_on:
       qdrant:   { condition: service_started }
+    profiles: [agents]
 
   hr-interview-agent:
     build: ./services/hr-interview-agent
     container_name: cp-hr-agent
     ports: ["8009:8009"]
     <<: *python-ai-defaults
+    profiles: [agents]
 
   technical-interview-agent:
     build: ./services/technical-interview-agent
     container_name: cp-tech-agent
     ports: ["8010:8010"]
     <<: *python-ai-defaults
+    profiles: [agents]
 
-  # ── Layer 5 · Infrastructure ───────────────────────────────────────────────
+  # ── Layer 5 · Infrastructure (fara profile — porneste mereu) ──────────────
   postgres:
     image: postgres:16-alpine
     container_name: cp-postgres
@@ -152,7 +173,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis/redis-stack:7.4.0-v1        # RedisStack = Redis + JSON + Search + TimeSeries
+    image: redis/redis-stack:7.4.0-v1
     container_name: cp-redis
     ports: ["6379:6379", "8091:8001"]         # 8091 = RedisInsight UI (8001 used by user-service)
     command: redis-server /usr/local/etc/redis/redis.conf
@@ -177,7 +198,6 @@ services:
     networks: [internal-net]
     restart: unless-stopped
 
-  # Redpanda: Kafka-compatible streaming, no Zookeeper, single binary
   redpanda:
     image: redpandadata/redpanda:v24.1.1
     container_name: cp-redpanda
@@ -204,7 +224,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  redpanda-console:                            # Replaces kafka-ui — better UX
+  redpanda-console:
     image: redpandadata/console:v2.5.2
     container_name: cp-redpanda-console
     ports: ["8080:8080"]
@@ -229,7 +249,7 @@ services:
     networks: [internal-net]
     restart: unless-stopped
 
-  # ── Layer 6 · Observability (Grafana LGTM Stack) ───────────────────────────
+  # ── Layer 6 · Observability ────────────────────────────────────────────────
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.103.0
     container_name: cp-otel-collector
@@ -238,6 +258,7 @@ services:
     ports: ["4317:4317", "4318:4318"]
     networks: [internal-net]
     restart: unless-stopped
+    profiles: [observability]
 
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -247,6 +268,7 @@ services:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks: [internal-net]
     restart: unless-stopped
+    profiles: [observability]
 
   loki:
     image: grafana/loki:3.0.0
@@ -256,6 +278,7 @@ services:
       - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
     networks: [internal-net]
     restart: unless-stopped
+    profiles: [observability]
 
   tempo:
     image: grafana/tempo:2.5.0
@@ -265,6 +288,7 @@ services:
       - ./observability/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
     networks: [internal-net]
     restart: unless-stopped
+    profiles: [observability]
 
   grafana:
     image: grafana/grafana:11.1.0
@@ -280,3 +304,4 @@ services:
     depends_on: [prometheus, loki, tempo]
     networks: [internal-net]
     restart: unless-stopped
+    profiles: [observability]
