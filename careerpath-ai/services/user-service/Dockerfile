@@ -1,4 +1,14 @@
 # User Service — NestJS + Prisma ORM
+
+# ── Development (hot reload) ───────────────────────────────────────────────────
+FROM node:20-alpine AS dev
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+EXPOSE 8001
+CMD ["sh", "-c", "npx prisma generate && npm run start:dev"]
+# ──────────────────────────────────────────────────────────────────────────────
+
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json* ./

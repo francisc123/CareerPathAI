@@ -7,15 +7,101 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
+
+  # ── Frontend — Next.js ──────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
-      target: dev          # foloseste stage-ul "dev" din Dockerfile, nu cel de productie
+      target: dev
     command: npm run dev
     volumes:
-      - ./frontend:/app              # codul tau local montat direct in container
-      - /app/node_modules            # node_modules ramane in container, nu se suprascrie
-      - /app/.next                   # .next cache ramane in container
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     environment:
-      - WATCHPACK_POLLING=true       # necesar pe Windows: detecteaza schimbari prin polling
-      - CHOKIDAR_USEPOLLING=true     # fallback pentru alte watchere
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+
+  # ── API Gateway — NestJS ────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      target: dev
+    volumes:
+      - ./api-gateway:/app
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - WATCHPACK_POLLING=true
+
+  # ── User Service — NestJS + Prisma ─────────────────────────────────────────
+  user-service:
+    build:
+      context: ./services/user-service
+      target: dev
+    volumes:
+      - ./services/user-service:/app
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - WATCHPACK_POLLING=true
+
+  # ── Notification Service — NestJS ───────────────────────────────────────────
+  notification-service:
+    build:
+      context: ./services/notification-service
+      target: dev
+    volumes:
+      - ./services/notification-service:/app
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - WATCHPACK_POLLING=true
+
+  # ── CV Service — FastAPI ────────────────────────────────────────────────────
+  cv-service:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8002 --reload
+    volumes:
+      - ./services/cv-service:/app
+
+  # ── Job Scraper — FastAPI ───────────────────────────────────────────────────
+  job-scraper-service:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8003 --reload
+    volumes:
+      - ./services/job-scraper-service:/app
+
+  # ── Agent Orchestrator — FastAPI ────────────────────────────────────────────
+  agent-orchestrator:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8005 --reload
+    volumes:
+      - ./services/agent-orchestrator:/app
+
+  # ── CV Analyzer Agent — FastAPI ─────────────────────────────────────────────
+  cv-analyzer-agent:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8006 --reload
+    volumes:
+      - ./services/cv-analyzer-agent:/app
+
+  # ── Learning Path Agent — FastAPI ───────────────────────────────────────────
+  learning-path-agent:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8007 --reload
+    volumes:
+      - ./services/learning-path-agent:/app
+
+  # ── Job Match Agent — FastAPI ───────────────────────────────────────────────
+  job-match-agent:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8008 --reload
+    volumes:
+      - ./services/job-match-agent:/app
+
+  # ── HR Interview Agent — FastAPI + WebSocket ────────────────────────────────
+  hr-interview-agent:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8009 --reload --ws websockets
+    volumes:
+      - ./services/hr-interview-agent:/app
+
+  # ── Technical Interview Agent — FastAPI + WebSocket ─────────────────────────
+  technical-interview-agent:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8010 --reload --ws websockets
+    volumes:
+      - ./services/technical-interview-agent:/app
