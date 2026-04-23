@@ -1,0 +1,21 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Docker Compose Override — Development
+#
+#  Aplicat AUTOMAT de Docker Compose peste docker-compose.yml.
+#  Nu modifica docker-compose.yml pentru development — editeaza doar aici.
+#  Pentru productie: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      target: dev          # foloseste stage-ul "dev" din Dockerfile, nu cel de productie
+    command: npm run dev
+    volumes:
+      - ./frontend:/app              # codul tau local montat direct in container
+      - /app/node_modules            # node_modules ramane in container, nu se suprascrie
+      - /app/.next                   # .next cache ramane in container
+    environment:
+      - WATCHPACK_POLLING=true       # necesar pe Windows: detecteaza schimbari prin polling
+      - CHOKIDAR_USEPOLLING=true     # fallback pentru alte watchere
