@@ -136,7 +136,7 @@ Asta face profilul mult mai precis decat orice analiza automata.
             Gemini returneaza JSON: {score, skills, gaps}
                     │
                     ▼
-            embedding_tool.py → transforma CV-ul in vector (768 dim)
+            embedding_tool.py → transforma CV-ul in vector (3072 dim)
             salveaza vectorul in Qdrant
                     │
                     ▼
@@ -195,14 +195,15 @@ cv-analyzer-agent/
 | **Pydantic** | valideaza ca JSON-ul de la Gemini e corect | `docs.pydantic.dev` |
 
 **De ce Gemini pentru embeddings?**
-Gemini `text-embedding-004` e gratuit. Vectorii au dimensiunea **768**.
-Qdrant e configurat cu `dim=768, metric=Cosine`.
+Gemini `gemini-embedding-001` e gratuit. Vectorii au dimensiunea **3072**.
+Qdrant e configurat cu `dim=3072, metric=Cosine`.
+Nota: modelul vechi `text-embedding-004` nu mai este disponibil.
 
 ---
 
 ## Taskurile in ordine — ce faci la fiecare pas
 
-### TASK 1 — CP-007: Prompturile ✓ (in lucru)
+### TASK 1 — CP-007: Prompturile ✓ (DONE)
 
 Fisierele `prompts/cv_scoring.txt` si `prompts/gap_analysis.txt` exista deja.
 
@@ -222,22 +223,175 @@ JSON-ul trebuie sa fie consistent 100% din incercari.
 
 **Qdrant ruleaza deja** la `localhost:6333` din `docker-compose --profile agents up`.
 
-Creaza `rag_testing/qdrant_setup.py`:
+---
+
+#### Ce este un "vector" si de ce il folosim
+
+Gemini transforma orice text intr-un sir de 3072 numere (un vector).
+Texte cu sens similar produc vectori apropiati matematic.
+
 ```
-# Creaza 3 colectii:
-# cv_embeddings   → dim=768, Cosine, payload: {user_id, skills, seniority, score}
-# job_embeddings  → dim=768, Cosine, payload: {title, company, url, source}
-# course_embeddings → dim=768, Cosine, payload: {title, provider, url, topic}
+"Python Developer cu FastAPI"  →  [0.12, -0.87, 0.34, ...]  ← 3072 numere
+"Backend Engineer Python"      →  [0.11, -0.85, 0.36, ...]  ← aproape de primul
+"Bucatar sef"                  →  [0.91,  0.54, -0.77, ...] ← departe de primii
 ```
 
-Creaza `rag_testing/embedding_pipeline.py`:
+Qdrant stocheaza acesti vectori si raspunde la intrebarea:
+**"Gaseste-mi CV-urile cel mai aproape de acest job."**
+
+---
+
+#### Pasul 1 — Porneste Qdrant
+
+```bash
+docker-compose --profile agents up
 ```
-# 1. Ia 3 CV-uri text hardcodate
-# 2. Genereaza embeddings cu Gemini text-embedding-004
-# 3. Le urca in Qdrant cv_embeddings
-# 4. Cauta: gaseste CV-urile similare cu "Python developer"
-# 5. Verifica ca rezultatele au sens
+
+Qdrant este disponibil la `http://localhost:6333`.
+Poti verifica in browser: `http://localhost:6333/dashboard`
+
+---
+
+#### Pasul 2 — Creaza fisierul `rag_testing/qdrant_setup.py`
+
+**Ce trebuie sa faca scriptul:**
+
+1. Se conecteaza la Qdrant pe `localhost:6333`
+2. Creeaza 3 colectii (daca nu exista deja):
+
 ```
+cv_embeddings
+  → size=3072, distance=Cosine
+  → payload per document: {user_id, skills, seniority, score}
+
+job_embeddings
+  → size=3072, distance=Cosine
+  → payload per document: {title, company, url, source}
+
+course_embeddings
+  → size=3072, distance=Cosine
+  → payload per document: {title, provider, url, topic}
+```
+
+3. Printeaza confirmarea ca fiecare colectie a fost creata
+
+**Biblioteca de folosit:** `qdrant-client` (deja in requirements.txt)
+
+**Import de start:**
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams
+```
+
+**Cum creezi o colectie:**
+```python
+client.create_collection(
+    collection_name="cv_embeddings",
+    vectors_config=VectorParams(size=3072, distance=Distance.COSINE)
+)
+```
+
+**Verificare ca ai terminat:** rulezi scriptul si in consola apare:
+```
+✓ Colectie creata: cv_embeddings
+✓ Colectie creata: job_embeddings
+✓ Colectie creata: course_embeddings
+```
+
+**Atentie:** daca rulezi scriptul de doua ori, va da eroare ca colectia exista deja.
+Rezolvi asta cu `recreate_collection()` sau verifici mai intai cu `get_collection()`.
+
+---
+
+#### Pasul 3 — Creaza fisierul `rag_testing/embedding_pipeline.py`
+
+**Ce trebuie sa faca scriptul, in ordine:**
+
+**3.1 — Pregateste 3 CV-uri text hardcodate**
+Unul junior, unul mid, unul senior. Texte simple, 5-6 randuri fiecare.
+
+**3.2 — Genereaza embeddings cu Gemini**
+
+Modelul de folosit: `gemini-embedding-001` (NU `gemini-2.5-flash`, acela e pentru chat)
+
+```python
+from google import genai
+
+client_gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+result = client_gemini.models.embed_content(
+    model="gemini-embedding-001",
+    contents="textul CV-ului"
+)
+
+vector = result.embeddings[0].values  # lista de 3072 numere
+```
+
+Verifica ca `len(vector) == 3072` — daca nu e 3072, ceva e gresit.
+
+**3.3 — Urca vectorii in Qdrant**
+
+```python
+from qdrant_client.models import PointStruct
+
+qdrant.upsert(
+    collection_name="cv_embeddings",
+    points=[
+        PointStruct(
+            id=1,                          # un numar unic pentru fiecare CV
+            vector=vector,                 # lista de 3072 numere de la Gemini
+            payload={                      # metadate despre CV
+                "user_id": "user_001",
+                "seniority": "junior",
+                "skills": ["Python", "HTML"],
+                "score": 38
+            }
+        )
+    ]
+)
+```
+
+**3.4 — Testeaza cautarea**
+
+Genereaza un vector pentru textul `"Python developer with FastAPI experience"`,
+apoi cauta in Qdrant care CV e cel mai aproape:
+
+```python
+query_vector = # embed "Python developer with FastAPI experience"
+
+results = qdrant.search(
+    collection_name="cv_embeddings",
+    query_vector=query_vector,
+    limit=3   # top 3 rezultate
+)
+
+for r in results:
+    print(r.score, r.payload)
+```
+
+**3.5 — Verifica ca rezultatele au sens**
+
+Cautarea de "Python developer" trebuie sa returneze CV-ul mid/senior Python
+inaintea celui junior cu HTML. Daca ordinea e logica, Qdrant functioneaza corect.
+
+**Verificare ca ai terminat:**
+```
+✓ 3 CV-uri urcate in Qdrant
+✓ Cautare "Python developer" → CV mid pe primul loc (score > 0.8)
+✓ CV junior HTML pe ultimul loc
+```
+
+---
+
+#### Greseli comune de evitat
+
+| Greseala | Fix |
+|---|---|
+| Folosesti `gemini-2.5-flash` pentru embeddings | Foloseste `gemini-embedding-001` |
+| `len(vector) != 3072` | Verifica modelul si cum extragi `.values` |
+| Colectia exista deja → eroare | Foloseste `recreate_collection()` sau prinde exceptia |
+| Qdrant nu raspunde | Verifica ca Docker ruleaza: `docker ps` |
+| ID-uri duplicate la upsert | Foloseste ID-uri unice (1, 2, 3 sau UUID) |
 
 ---
 
@@ -261,7 +415,7 @@ Creaza `rag_testing/embedding_pipeline.py`:
 2. Citeste promptul din prompts/cv_scoring.txt
 3. Trimite la Gemini → primeste JSON cu scorul
 4. Valideaza JSON cu Pydantic (retry de 3 ori daca esueaza)
-5. Genereaza embedding cu Gemini text-embedding-004
+5. Genereaza embedding cu Gemini gemini-embedding-001
 6. Salveaza vectorul in Qdrant
 7. Salveaza scorul in PostgreSQL (tabela cv_uploads)
 8. Returneaza rezultatul pentru publisher
@@ -301,7 +455,7 @@ Variabilele de mediu vin din `.env`. Folosesti `os.getenv("GEMINI_API_KEY")`.
 ## Ordinea de lucru
 
 ```
-[ ] CP-007 — testeaza prompturile cu 5 CV-uri (nu ai nevoie de Docker)
+[✓] CP-007 — testeaza prompturile cu 5 CV-uri (DONE)
 [ ] CP-008 — configureaza Qdrant si testeaza embeddings
 [ ] CP-009 — scheletul FastAPI + consumer Redpanda
 [ ] CP-020 — implementarea completa
