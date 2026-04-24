@@ -47,6 +47,11 @@ redpanda-topics:
 logs-gateway:
 	docker compose logs -f api-gateway
 
+# ─── MinIO Init ────────────────────────────────────────────────────────────────
+minio-init:
+	docker-compose cp infrastructure/minio/init-buckets.sh minio:/tmp/init-buckets.sh
+	docker-compose exec minio bash /tmp/init-buckets.sh
+
 logs-cv:
 	docker compose logs -f cv-service cv-analyzer-agent
 
