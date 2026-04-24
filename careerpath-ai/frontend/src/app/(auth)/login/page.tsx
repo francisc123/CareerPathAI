@@ -7,6 +7,7 @@ import * as z from "zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loginSchema } from "@/lib/validations/auth";
+import { api } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth.store";
 import { mockAuthResponse } from "@/lib/mocks/auth";
 

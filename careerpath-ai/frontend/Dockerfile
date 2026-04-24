@@ -1,16 +1,6 @@
 # Imaginea de bază
 FROM node:18-alpine AS base
 
-# ── Development (hot reload) ───────────────────────────────────────────────────
-FROM base AS dev
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-EXPOSE 3000
-CMD ["npm", "run", "dev"]
-# ──────────────────────────────────────────────────────────────────────────────
-
 # Etapa 1: Instalarea dependențelor
 FROM base AS deps
 WORKDIR /app
