@@ -37,8 +37,11 @@ keys:
 	@echo "✓ RS256 key pair generated in ./keys/"
 
 # ─── Kafka topics ──────────────────────────────────────────────────────────────
-kafka-topics:
-	docker compose exec kafka bash /scripts/create-topics.sh
+# ─── Redpanda topics ───────────────────────────────────────────────────────────
+# ─── Redpanda topics ───────────────────────────────────────────────────────────
+redpanda-topics:
+	docker cp infrastructure/redpanda/create-topics.sh careerpath-ai-redpanda-1:/tmp/create-topics.sh
+	docker exec careerpath-ai-redpanda-1 bash /tmp/create-topics.sh
 
 # ─── Individual service logs ───────────────────────────────────────────────────
 logs-gateway:

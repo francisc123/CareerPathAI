@@ -1,9 +1,10 @@
 # Redpanda Console Configuration
 kafka:
   brokers: ["redpanda:9092"]
-  schemaRegistry:
-    enabled: true
-    urls: ["http://redpanda:8081"]
+#  schemaRegistry:
+#    enabled: true
+#    urls: ["http://redpanda:8081"]
+#am comentat blocul de mai sus deoarece interfata gaseste cheia pentru redpanda dar nu o recunoaste ~Francisc
 
 redpanda:
   adminApi:
