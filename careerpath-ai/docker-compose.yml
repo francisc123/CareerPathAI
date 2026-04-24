@@ -173,20 +173,19 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis/redis-stack:7.4.0-v1
-    container_name: cp-redis
-    ports: ["6379:6379", "8091:8001"]         # 8091 = RedisInsight UI (8001 used by user-service)
-    command: redis-server /usr/local/etc/redis/redis.conf
+    image: redis:7-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
-      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
-    networks: [internal-net]
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - internal-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "change_me_redis_password", "ping"]
       interval: 10s
-      timeout: 3s
       retries: 5
-    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:v1.10.0
