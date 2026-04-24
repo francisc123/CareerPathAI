@@ -107,14 +107,14 @@ cv.uploaded → cv-analyzer-agent → cv.analyzed
 | PostgreSQL | Francis (backend) | users, profiles, cv_uploads, scraped_jobs, job_matches |
 | PostgreSQL | Rares (AI agents) | learning_paths, quiz_attempts, interview_sessions |
 | Redis | Francis | JWT sessions, rate limiting, workflow state (TTL) |
-| Qdrant | Rares | cv_embeddings, job_embeddings, course_embeddings (dim=768, Cosine) |
+| Qdrant | Rares | cv_embeddings, job_embeddings, course_embeddings (dim=3072, Cosine) |
 | MinIO | Francis | Raw CV files (bucket: cvs-raw) |
 
 Services access only their own tables. Cross-service data flows exclusively through Redpanda events.
 
 ### Qdrant collections
 
-All collections use dimension `768` (Gemini `text-embedding-004`). The `requirements.txt` originally referenced OpenAI embeddings — the project uses Gemini instead. Qdrant collection setup is in `rag_testing/qdrant_setup.py`.
+All collections use dimension `3072` (Gemini `gemini-embedding-001`). The model `text-embedding-004` is no longer available — use `gemini-embedding-001` instead. Qdrant collection setup is in `rag_testing/qdrant_setup.py`.
 
 ### JWT authentication
 
