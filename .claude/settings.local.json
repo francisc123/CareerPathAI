@@ -14,7 +14,14 @@
       "Bash(git -C /c/Rares/Carrer_Path status)",
       "Bash(git -C /c/Rares/Carrer_Path log --oneline -5)",
       "Bash(git -C /c/Rares/Carrer_Path branch -a)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "WebSearch",
+      "Bash(curl -s http://localhost:6333/healthz)",
+      "Bash(python qdrant_setup.py)",
+      "Bash(python embedding_pipeline.py)",
+      "Bash(rm -v C:/Rares/Carrer_Path/careerpath-ai/services/cv-analyzer-agent/src/main.py C:/Rares/Carrer_Path/careerpath-ai/services/cv-analyzer-agent/src/kafka_producer.py C:/Rares/Carrer_Path/careerpath-ai/services/cv-analyzer-agent/src/producer_schema.py C:/Rares/Carrer_Path/careerpath-ai/services/cv-analyzer-agent/src/consumers/fastapi/main.py)",
+      "Bash(rmdir C:/Rares/Carrer_Path/careerpath-ai/services/cv-analyzer-agent/src/consumers/fastapi)",
+      "Bash(rm -rf C:/Rares/Carrer_Path/careerpath-ai/services/cv-analyzer-agent/src/__pycache__)"
     ]
   }
 }
