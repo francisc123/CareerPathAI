@@ -58,14 +58,20 @@ services:
 
   # ── Layer 2 · API Gateway ──────────────────────────────────────────────────
   api-gateway:
-    build: ./api-gateway
-    container_name: cp-gateway
-    ports: ["8000:8000"]
-    env_file: .env
-    networks: [public-net, internal-net]
-    depends_on: [user-service]
-    restart: unless-stopped
-    profiles: [backend, frontend]
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+      target: production
+    networks:
+      - public-net
+      - internal-net
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+    volumes:
+      - ./keys:/app/keys:ro
 
   # ── Layer 3 · Core Services ────────────────────────────────────────────────
   user-service:
