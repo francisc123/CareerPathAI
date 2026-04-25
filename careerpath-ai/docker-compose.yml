@@ -95,6 +95,20 @@ services:
       redpanda:  { condition: service_healthy }
     profiles: [backend]
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.0
+    container_name: cp-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8484:8080"
+    networks:
+      - public-net
+      - internal-net
+    restart: unless-stopped
+
   job-scraper-service:
     build: ./services/job-scraper-service
     container_name: cp-job-scraper
