@@ -3,8 +3,7 @@ uvicorn[standard]==0.30.1
 pydantic==2.7.4
 
 # LLM
-anthropic==0.30.0        # Claude Sonnet 4.6 — primary model for CV analysis
-openai==1.35.13          # text-embedding-3-small for vector embeddings
+google-genai>=0.8.0
 
 # Vector DB
 qdrant-client==1.10.0
@@ -13,8 +12,7 @@ qdrant-client==1.10.0
 aiokafka==0.11.0
 
 # DB
-asyncpg==0.29.0          # Async PostgreSQL driver (fastest Python PG driver)
-sqlalchemy[asyncio]==2.0.31
+asyncpg==0.29.0
 
 # Observability
 opentelemetry-api==1.25.0
