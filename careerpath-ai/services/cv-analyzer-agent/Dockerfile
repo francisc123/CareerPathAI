@@ -1,4 +1,4 @@
-# CV Analyzer Agent — Python + Claude + Qdrant RAG
+# CV Analyzer Agent — Python + Gemini + Qdrant RAG
 FROM python:3.12-slim AS production
 WORKDIR /app
 RUN adduser --system --uid 1001 appuser
