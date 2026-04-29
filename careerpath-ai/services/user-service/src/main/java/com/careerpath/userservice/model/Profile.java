@@ -15,4 +15,11 @@ public class Profile {
     private String lastName;
     private String bio;
     private String avatarUrl;
+
+    private String name;
+    private String title;
+    private String location;
+    private String linkedinUrl;
+    private String targetRole;
+    private String seniorityLevel;
 }
