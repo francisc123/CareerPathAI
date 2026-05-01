@@ -4,6 +4,13 @@
 .env.*.local
 keys/
 
+#Python modules
+env/
+venv/
+bin/
+lib/
+include/
+*.pyc
 # Dependencies
 node_modules/
 __pycache__/
