@@ -1,0 +1,167 @@
+import os
+import uuid
+import json
+import magic
+import boto3
+import asyncio
+from typing import Optional
+from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Depends
+from contextlib import asynccontextmanager
+
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Column, String, DateTime, Text, func, select
+
+from aiokafka import AIOKafkaProducer
+from pydantic import BaseModel
+from extraction import extract_text_from_bytes
+
+#Configuratii
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://careerpath_user:change_me_strong_password@localhost:5432/careerpath")
+MINIO_URL = os.getenv("MINIO_URL", "http://localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+REDPANDA_BROKER = os.getenv("REDPANDA_BROKER", "localhost:19092")
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+# Baza de date (PostgreSQL)
+Base = declarative_base()
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+class CVUpload(Base):
+    __tablename__ = "cv_uploads"
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    file_path = Column(String)
+    status = Column(String)
+    extracted_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+# MinIO (boto3 - Sincron)
+
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCES_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "change_me_minio_password")
+
+s3_client = boto3.client(
+    's3',
+    endpoint_url=MINIO_URL,
+    aws_access_key_id=MINIO_ACCESS_KEY,
+    aws_secret_access_key=MINIO_SECRET_KEY,
+    region_name='us-east-1' # Default obligatoriu pt boto3
+)
+
+# FastAPI & Redpanda Lifecycle
+producer = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Setup DB
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Setup Redpanda/Kafka Producer
+    global producer
+    producer = AIOKafkaProducer(
+        bootstrap_servers=REDPANDA_BROKER,
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
+    await producer.start()
+
+    yield
+
+    await producer.stop()
+
+app = FastAPI(lifespan=lifespan, title="CV Service")
+
+# Modele Pydantic
+class CvUploadedEvent(BaseModel):
+    job_id: str
+    user_id: str
+    file_path: str
+    status: str
+
+
+# Endpoints
+
+
+@app.post("/upload")
+async def upload_cv(
+        file: UploadFile = File(...),
+        x_user_id: str = Header(..., description="ID-ul utilizatorului injectat de API Gateway"),
+        db: AsyncSession = Depends(get_db)
+):
+    # 1. Citire și Validare dimensiune (> 10MB -> 413)
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+
+    # 2. Validare tip fișier cu python-magic (-> 415)
+    mime_type = magic.from_buffer(file_bytes, mime=True)
+    allowed_mimes = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/jpeg"
+    ]
+    if mime_type not in allowed_mimes:
+        raise HTTPException(status_code=415, detail=f"Unsupported file type: {mime_type}. Only PDF, DOCX, and JPG are allowed.")
+
+    # Generare ID-uri
+    job_id = str(uuid.uuid4())
+    ext = file.filename.split('.')[-1].lower() if '.' in file.filename else 'unknown'
+    file_path = f"{x_user_id}/{job_id}.{ext}"
+
+    # 3. Extragere Text
+    extracted_text = await asyncio.to_thread(extract_text_from_bytes, file_bytes, mime_type)
+
+    # 4. Upload în MinIO
+    try:
+        await asyncio.to_thread(
+            s3_client.put_object,
+            Bucket="cvs-raw",
+            Key=file_path,
+            Body=file_bytes,
+            ContentType=mime_type
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MinIO upload failed: {str(e)}")
+
+    # 5. Salvare în PostgreSQL
+    new_cv = CVUpload(
+        id=job_id,
+        user_id=x_user_id,
+        file_path=file_path,
+        status="uploaded",
+        extracted_text=extracted_text
+    )
+    db.add(new_cv)
+    await db.commit()
+
+    # 6. Publish eveniment către Redpanda
+    event = CvUploadedEvent(
+        job_id=job_id,
+        user_id=x_user_id,
+        file_path=file_path,
+        status="uploaded"
+    )
+    await producer.send_and_wait("cv.uploaded", event.model_dump())
+
+    return {"job_id": job_id, "status": "processing"}
+
+
+@app.get("/status/{job_id}")
+async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CVUpload).where(CVUpload.id == job_id))
+    job = result.scalars().first()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job ID not found")
+
+    return {
+        "job_id": job.id,
+        "status": job.status
+    }
