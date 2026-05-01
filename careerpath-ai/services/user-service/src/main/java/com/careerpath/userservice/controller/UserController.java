@@ -2,6 +2,9 @@ package com.careerpath.userservice.controller;
 
 import com.careerpath.userservice.model.Profile;
 import com.careerpath.userservice.model.User;
+import com.careerpath.userservice.model.UserProgress;
+import com.careerpath.userservice.repository.UserProgressRepository;
+import com.careerpath.userservice.repository.UserRepository;
 import com.careerpath.userservice.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +17,10 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+    @Autowired
+    private UserProgressRepository progressRepository;
+    @Autowired
+    private org.springframework.kafka.core.KafkaTemplate<String, String> kafkaTemplate;
 
     @GetMapping("/me")
     public User getCurrentUser(@AuthenticationPrincipal Jwt jwt) {
@@ -55,5 +62,60 @@ public class UserController {
         user.getProfile().setAvatarUrl(profileData.getAvatarUrl());
 
         return userService.saveUser(user);
+    }
+
+    @PutMapping("/progress")
+    public UserProgress updateProgress(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        UserProgress progress  = progressRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Progress not found"));
+
+        progress.setModulesCompleted(progress.getModulesCompleted() + 1);
+
+        if(progress.getModulesCompleted().equals(progress.getModulesTotal())) {
+            kafkaTemplate.send("learning.completed", userId, "Success");
+        }
+        return progressRepository.save(progress);
+    }
+
+    @GetMapping("/profile")
+    public Profile getFullProfile(@AuthenticationPrincipal Jwt jwt) {
+        return userService.getUserById(jwt.getSubject())
+                .map(User::getProfile)
+                .orElseThrow(() -> new RuntimeException("Profile not found"));
+    }
+
+    @PutMapping("/profile")
+    public Profile updateFullProfile(@AuthenticationPrincipal Jwt jwt, @RequestBody Profile updates) {
+        User user = userService.getUserById(jwt.getSubject())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Profile p = user.getProfile();
+
+        p.setName(updates.getName());
+        p.setTitle(updates.getTitle());
+        p.setLocation(updates.getLocation());
+        p.setLinkedinUrl(updates.getLinkedinUrl());
+        p.setTargetRole(updates.getTargetRole());
+        p.setSeniorityLevel(updates.getSeniorityLevel());
+        p.setBio(updates.getBio());
+
+        user.setProfile(p);
+
+        return userService.saveUser(user).getProfile();
+    }
+
+    @GetMapping("/dashboard")
+    public com.careerpath.userservice.dto.DashboardDTO getDashboard(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        User user = userService.getUserById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+
+        com.careerpath.userservice.dto.DashboardDTO dashboard = new com.careerpath.userservice.dto.DashboardDTO();
+        dashboard.setProgress(progressRepository.findByUserId(userId).orElse(null));
+
+        dashboard.setLatestCvUpload(null);
+        dashboard.setTopJobMatches(new java.util.ArrayList<>());
+
+        return dashboard;
     }
 }
