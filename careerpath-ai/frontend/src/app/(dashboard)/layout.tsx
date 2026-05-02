@@ -8,13 +8,37 @@ import { Globe, Zap, ShieldCheck, UserCircle, LogOut } from "lucide-react";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen w-screen flex flex-col bg-[#020617] text-white overflow-hidden relative font-sans">
+      
+      {/* --- INJECTARE STIL SCROLLBAR (CUSTOM SLIDE) --- */}
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+          transition: all 0.3s ease;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.4);
+        }
+        /* Firefox */
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+        }
+      `}</style>
+
       {/* Background Decor consistent */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-500/10 blur-[100px]" />
         <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] rounded-full bg-blue-500/5 blur-[100px]" />
       </div>
 
-      {/* --- HEADER PREMIUM (ADAPTAT DASHBOARD) --- */}
+      {/* --- HEADER PREMIUM --- */}
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-center px-6 py-6">
         <nav className="w-full max-w-[1440px] flex items-center justify-between px-8 py-3 bg-white/[0.02] border border-white/10 backdrop-blur-xl rounded-full shadow-2xl">
           
@@ -39,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NavLink icon={<ShieldCheck size={14} />} label="Safety" />
           </div>
 
-          {/* Profil Utilizator (Dreapta Sus) */}
+          {/* Profil Utilizator */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 pl-4 border-l border-white/10 group cursor-pointer">
               <div className="text-right hidden sm:block leading-none">
@@ -53,7 +77,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
             
-            {/* Buton Deconectare (Vizual) */}
             <button className="p-2 text-slate-500 hover:text-red-400 transition-colors">
               <LogOut size={18} />
             </button>
@@ -67,11 +90,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Sidebar />
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-10 custom-scroll no-scrollbar">
-          <div className="max-w-[1400px] mx-auto">
-            {children}
-          </div>
-        </main>
+        {/* --- MAIN AREA CU SCROLLBAR STILIZAT --- */}
+        <main className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+  <div className="max-w-[1400px] mx-auto w-full flex-1 flex flex-col p-10 min-h-0">
+    {children}
+  </div>
+</main>
       </div>
     </div>
   );

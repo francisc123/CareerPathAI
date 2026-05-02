@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* Stil pentru scrollbar-ul întregii pagini */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px; /* Foarte subțire */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent; /* Track-ul este invizibil */
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05); /* Aproape invizibil când nu e folosit */
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.3); /* Indigo discret la hover */
+    border: 1px solid rgba(99, 102, 241, 0.1);
+  }
+
+  /* Pentru Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
