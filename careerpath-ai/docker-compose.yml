@@ -85,9 +85,13 @@ services:
     profiles: [backend, frontend]
 
   cv-service:
-    build: ./services/cv-service
+    build:
+      context: .
+      dockerfile: services/cv-service/Dockerfile
     container_name: cp-cv-service
     ports: ["8002:8002"]
+    environment:
+      - PYTHONPATH=/app:/app/src:/
     <<: *python-ai-defaults
     depends_on:
       postgres:  { condition: service_healthy }
