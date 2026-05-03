@@ -1,27 +1,29 @@
 import os
 import uuid
-import json
 import magic
 import boto3
 import asyncio
+from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Depends
 from contextlib import asynccontextmanager
+
+from shared.types.kafka_events import CvUploadedEvent
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, String, DateTime, Text, func, select
 
-from aiokafka import AIOKafkaProducer
-from pydantic import BaseModel
+from cp_kafka import KafkaProducerBase
+
 from extraction import extract_text_from_bytes
 
-#Configuratii
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://careerpath_user:change_me_strong_password@localhost:5432/careerpath")
-MINIO_URL = os.getenv("MINIO_URL", "http://localhost:9000")
+# Configuratii
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careerpath_user:change_me_strong_password@postgres:5432/careerpath").replace("postgresql://", "postgresql+asyncpg://")
+MINIO_URL = os.getenv("MINIO_URL", "http://minio:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-REDPANDA_BROKER = os.getenv("REDPANDA_BROKER", "localhost:19092")
+REDPANDA_BROKER = os.getenv("KAFKA_BROKERS", "redpanda:9092")
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 # Baza de date (PostgreSQL)
@@ -43,16 +45,12 @@ async def get_db():
         yield session
 
 # MinIO (boto3 - Sincron)
-
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCES_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "change_me_minio_password")
-
 s3_client = boto3.client(
     's3',
     endpoint_url=MINIO_URL,
     aws_access_key_id=MINIO_ACCESS_KEY,
     aws_secret_access_key=MINIO_SECRET_KEY,
-    region_name='us-east-1' # Default obligatoriu pt boto3
+    region_name='us-east-1'
 )
 
 # FastAPI & Redpanda Lifecycle
@@ -64,12 +62,10 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Setup Redpanda/Kafka Producer
+    # --- MODIFICARE AICI ---
+    # Setup Redpanda/Kafka Producer folosind noul pachet shared
     global producer
-    producer = AIOKafkaProducer(
-        bootstrap_servers=REDPANDA_BROKER,
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
+    producer = KafkaProducerBase(bootstrap_servers=REDPANDA_BROKER)
     await producer.start()
 
     yield
@@ -78,29 +74,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="CV Service")
 
-# Modele Pydantic
-class CvUploadedEvent(BaseModel):
-    job_id: str
-    user_id: str
-    file_path: str
-    status: str
-
+# Clasa locală CvUploadedEvent a fost ștearsă complet (folosim importul de sus)
 
 # Endpoints
-
-
 @app.post("/upload")
 async def upload_cv(
         file: UploadFile = File(...),
         x_user_id: str = Header(..., description="ID-ul utilizatorului injectat de API Gateway"),
         db: AsyncSession = Depends(get_db)
 ):
-    # 1. Citire și Validare dimensiune (> 10MB -> 413)
+    # 1. Citire și Validare dimensiune
     file_bytes = await file.read()
     if len(file_bytes) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
 
-    # 2. Validare tip fișier cu python-magic (-> 415)
+    # 2. Validare tip fișier cu python-magic
     mime_type = magic.from_buffer(file_bytes, mime=True)
     allowed_mimes = [
         "application/pdf",
@@ -141,17 +129,20 @@ async def upload_cv(
     db.add(new_cv)
     await db.commit()
 
-    # 6. Publish eveniment către Redpanda
+    # --- MODIFICARE AICI ---
+    # 6. Publish eveniment către Redpanda folosind structura din shared/types
     event = CvUploadedEvent(
-        job_id=job_id,
         user_id=x_user_id,
-        file_path=file_path,
-        status="uploaded"
+        job_id=job_id,
+        minio_path=file_path,
+        file_name=file.filename,
+        timestamp=datetime.utcnow()
     )
-    await producer.send_and_wait("cv.uploaded", event.model_dump())
+    # Metoda noului nostru pachet se ocupă de serializarea în JSON automat
+    await producer.send_message("cv.uploaded", event)
+    # -----------------------
 
     return {"job_id": job_id, "status": "processing"}
-
 
 @app.get("/status/{job_id}")
 async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
