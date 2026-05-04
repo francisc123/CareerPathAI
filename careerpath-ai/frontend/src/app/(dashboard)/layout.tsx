@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 pl-4 border-l border-white/10 group cursor-pointer">
               <div className="text-right hidden sm:block leading-none">
-                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Vlad Savu</p>
+                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">ADMIN</p>
                 <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter opacity-80">Pro Account</p>
               </div>
               <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 p-[1px] transition-transform group-hover:scale-105">
@@ -86,7 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Structură Conținut cu Sidebar */}
       <div className="flex flex-1 overflow-hidden z-10 pt-28">
-        <aside className="w-64 hidden lg:block border-r border-white/5 bg-black/10 backdrop-blur-md">
+        <aside className="w-64 hidden lg:block border-r border-white/5 bg-black/10 backdrop-blur-md overflow-hidden">
           <Sidebar />
         </aside>
 
