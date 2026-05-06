@@ -18,3 +18,17 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Funcție pentru upload CV
+export const uploadCV = async (file: File): Promise<{ job_id: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await api.post('/cv/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  return response.data;
+};

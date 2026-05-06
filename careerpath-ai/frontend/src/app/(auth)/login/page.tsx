@@ -6,15 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loginSchema } from "@/lib/validations/auth";
-import { api } from "@/lib/api-client";
+import { loginSchema } from "@/lib/validations/auth"; // Verifică acest import!
 import { useAuthStore } from "@/store/auth.store";
-import { mockAuthResponse } from "@/lib/mocks/auth";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { AlertCircle } from "lucide-react";
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
@@ -23,58 +21,102 @@ export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
+  const { 
+    register, 
+    handleSubmit, 
+    formState: { errors, dirtyFields } 
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
+    mode: "onChange",
     defaultValues: { email: "", password: "" }
   });
 
   async function onSubmit(data: LoginFormValues) {
     setIsLoading(true);
     try {
-      console.log("Apelare API cu:", data);
-      
-      // Simulare apel API real folosind Axios
-      // În viitor: const res = await api.post("/auth/login", data);
-      await new Promise(r => setTimeout(r, 1500));
-      const res = { data: mockAuthResponse }; // Simulăm răspunsul de la backend
-
-      // Salvăm în Zustand (care persistă automat în localStorage datorită configurării din CP-011)
-      setAuth(res.data.user, res.data.token);
-      
+      await new Promise(r => setTimeout(r, 1200));
+      setAuth({ name: "User", email: data.email }, "mock-token");
       router.push("/dashboard");
-    } catch (error) {
-      console.error("Eroare la autentificare:", error);
-    } finally {
-      setIsLoading(false);
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setIsLoading(false); 
     }
   }
 
+  const shouldShowError = (fieldName: string) => {
+    return !!errors[fieldName as keyof typeof errors] && !!dirtyFields[fieldName as keyof typeof dirtyFields];
+  };
+
+  const inputErrorClass = (fieldName: string) => 
+    shouldShowError(fieldName) 
+      ? 'border-red-500/60 bg-red-500/5 focus:border-red-500 ring-1 ring-red-500/20' 
+      : 'focus:border-indigo-500/50';
+
   return (
-    <Card className="border-gray-800 bg-gray-900/50 backdrop-blur-sm text-white shadow-2xl">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Autentificare</CardTitle>
-        <CardDescription className="text-gray-400 text-center">Intră în contul tău CareerPath AI</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" {...register("email")} className="bg-gray-800 border-gray-700" />
-            {errors.email && <p className="text-xs text-red-500 font-medium">{errors.email.message}</p>}
+    <Card className="w-full max-w-[420px] border-white/5 bg-white/[0.01] backdrop-blur-3xl text-white shadow-2xl rounded-[32px] overflow-hidden">
+      <CardContent className="pt-10 pb-8 px-10 text-center">
+        {/* Abstract Nexus Logo */}
+        <div className="flex justify-center mb-6">
+          <div className="relative w-11 h-11">
+             <div className="absolute inset-0 bg-indigo-500 rounded-full animate-pulse opacity-20" />
+             <div className="absolute inset-0 border-2 border-indigo-400 rounded-full" />
+             <div className="absolute inset-0 border-2 border-white/30 rounded-full rotate-45 scale-75" />
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_#fff]" />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Parolă</Label>
-            <Input id="password" type="password" {...register("password")} className="bg-gray-800 border-gray-700" />
-            {errors.password && <p className="text-xs text-red-500 font-medium">{errors.password.message}</p>}
+        </div>
+        
+        <h1 className="text-2xl font-bold tracking-tight mb-1 text-white">Welcome Back</h1>
+        <p className="text-slate-500 text-xs italic mb-8 font-medium">Sign in to your CareerPath AI account</p>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-left">
+          <div className="space-y-1.5">
+            <Label className={`text-[10px] font-black uppercase tracking-[0.2em] ml-1 transition-colors ${shouldShowError("email") ? 'text-red-400' : 'text-slate-500'}`}>
+              Account Email
+            </Label>
+            <div className="relative">
+              <Input 
+                {...register("email")} 
+                placeholder="name@domain.com" 
+                className={`bg-white/5 border-white/10 rounded-xl h-11 text-xs text-white placeholder:text-slate-600 transition-all ${inputErrorClass("email")}`} 
+              />
+              {shouldShowError("email") && <AlertCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 pointer-events-none" />}
+            </div>
           </div>
-          <Button type="submit" className="w-full mt-4" disabled={isLoading}>
-            {isLoading ? "Se verifică datele..." : "Conectare"}
+
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center px-1">
+              <Label className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${shouldShowError("password") ? 'text-red-400' : 'text-slate-500'}`}>
+                Password
+              </Label>
+              <button type="button" className="text-[10px] text-indigo-400 font-bold uppercase hover:text-white transition-colors">Forgot?</button>
+            </div>
+            <div className="relative">
+              <Input 
+                type="password" 
+                {...register("password")} 
+                placeholder="••••••••" 
+                className={`bg-white/5 border-white/10 rounded-xl h-11 text-xs text-white transition-all ${inputErrorClass("password")}`} 
+              />
+              {shouldShowError("password") && <AlertCircle size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 pointer-events-none" />}
+            </div>
+          </div>
+
+          <Button 
+            type="submit" 
+            className="w-full h-11 bg-white text-black hover:bg-slate-200 rounded-xl font-bold text-xs mt-4 active:scale-95 transition-all shadow-xl shadow-white/5" 
+            disabled={isLoading}
+          >
+            {isLoading ? "Signing in..." : "Sign In"}
           </Button>
         </form>
+
+        <div className="mt-8">
+          <p className="text-[11px] text-slate-500 font-medium tracking-wide">
+            New here? <Link href="/register" className="text-indigo-400 uppercase tracking-widest font-black hover:text-white transition-colors underline underline-offset-4 ml-1">Join now</Link>
+          </p>
+        </div>
       </CardContent>
-      <CardFooter className="flex justify-center border-t border-gray-800 pt-4 text-sm text-gray-400">
-        Nu ai cont? <Link href="/register" className="ml-1 text-primary hover:underline">Creează unul aici</Link>
-      </CardFooter>
     </Card>
   );
 }

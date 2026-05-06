@@ -10,9 +10,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN adduser --system --uid 1001 appuser
 
 FROM base AS production
-COPY requirements.txt .
+# 1. Copiem pachetul shared în container (la nivelul de bază /shared)
+COPY shared /shared
+
+# 2. Copiem cerințele serviciului
+COPY services/cv-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY --chown=appuser . .
+
+# 3. Copiem restul codului din serviciu în /app
+COPY --chown=appuser services/cv-service/ .
+
 USER appuser
 EXPOSE 8002
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "2"]
