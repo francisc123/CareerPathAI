@@ -4,12 +4,12 @@
 .env.*.local
 keys/
 
-#Python modules
+#Python modules (root-level venv only)
 env/
 venv/
-bin/
-lib/
-include/
+/bin/
+/lib/
+/include/
 *.pyc
 # Dependencies
 node_modules/
