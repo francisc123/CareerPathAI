@@ -4,7 +4,7 @@
 FROM node:20-alpine AS dev
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 EXPOSE 8004
 CMD ["npm", "run", "start:dev"]
 # ──────────────────────────────────────────────────────────────────────────────
@@ -12,7 +12,7 @@ CMD ["npm", "run", "start:dev"]
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 

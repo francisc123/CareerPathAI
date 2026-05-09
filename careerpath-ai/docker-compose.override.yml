@@ -40,7 +40,7 @@ services:
       context: ./services/user-service
       target: production
 
-  # ── Notification Service — NestJS ───────────────────────────────────────────
+  # ── Notification Service — NestJS (stub) ────────────────────────────────────
   notification-service:
     build:
       context: ./services/notification-service
@@ -48,9 +48,6 @@ services:
     volumes:
       - ./services/notification-service:/app
       - /app/node_modules
-      - /app/dist
-    environment:
-      - WATCHPACK_POLLING=true
 
   # ── CV Service — FastAPI ────────────────────────────────────────────────────
   cv-service:
