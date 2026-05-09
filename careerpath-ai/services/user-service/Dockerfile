@@ -1,30 +1,17 @@
-# User Service — NestJS + Prisma ORM
+# User Service — Java 21 + Spring Boot + Maven
 
-# ── Development (hot reload) ───────────────────────────────────────────────────
-FROM node:20-alpine AS dev
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
-EXPOSE 8001
-CMD ["sh", "-c", "npx prisma generate && npm run start:dev"]
-# ──────────────────────────────────────────────────────────────────────────────
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY src ./src
+RUN mvn clean package -DskipTests -B
 
-FROM node:20-alpine AS builder
+FROM eclipse-temurin:21-jre-alpine AS production
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
-COPY . .
-RUN npx prisma generate
-RUN npm run build
-
-FROM node:20-alpine AS production
-WORKDIR /app
-ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 appuser
-COPY --from=builder --chown=appuser:nodejs /app/dist           ./dist
-COPY --from=builder --chown=appuser:nodejs /app/node_modules   ./node_modules
-COPY --from=builder /app/package.json ./
+RUN addgroup --system --gid 1001 appgroup \
+ && adduser  --system --uid 1001 appuser --ingroup appgroup
+COPY --from=builder --chown=appuser:appgroup /app/target/*.jar app.jar
 USER appuser
 EXPOSE 8001
-CMD ["node", "dist/main.js"]
+CMD ["java", "-jar", "app.jar"]

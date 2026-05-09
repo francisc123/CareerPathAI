@@ -4,12 +4,8 @@ import React, { useState, useEffect } from "react";
 import { Search, Filter, ArrowUpDown, ClipboardCheck, ExternalLink, FileText, Briefcase, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
-const MOCK_JOBS = [
-  { id: "1", title: "Frontend Developer", company: "Nexus Tech", source: "LinkedIn", match: 94, url: "https://linkedin.com", location: "Remote", coverLetter: "Dear Nexus Tech Team, as a Frontend Developer with 3 years of experience in React..." },
-  { id: "2", title: "React Specialist", company: "Innovate Solutions", source: "eJobs", match: 88, url: "https://ejobs.ro", location: "Bucharest", coverLetter: "To the Innovate Solutions HR, I am writing to express my interest in the React Specialist role..." },
-  { id: "3", title: "Full Stack Engineer", company: "Cyberdyne", source: "Indeed", match: 72, url: "https://indeed.com", location: "Cluj", coverLetter: "Dear Cyberdyne, my background in both Node.js and React makes me a perfect fit..." },
-];
+import { getJobMatches } from "@/lib/api-client";
+import { useAuthStore } from "@/store/auth.store";
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -17,14 +13,31 @@ export default function JobsPage() {
   const [filterSource, setFilterSource] = useState("All");
   const [sortBy, setSortBy] = useState("match");
   const [selectedCoverLetter, setSelectedCoverLetter] = useState<string | null>(null);
+  const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setJobs(MOCK_JOBS);
+    if (!user?.id) {
       setLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+      return;
+    }
+    getJobMatches(user.id)
+      .then(({ matches }) => {
+        setJobs(
+          matches.map((m, i) => ({
+            id: String(i),
+            title: m.job_title,
+            company: m.company,
+            source: m.source,
+            match: m.match_score,
+            url: m.url,
+            location: m.location,
+            coverLetter: m.generated_cover_letter,
+          }))
+        );
+      })
+      .catch(() => setJobs([]))
+      .finally(() => setLoading(false));
+  }, [user?.id]);
 
   const filteredJobs = jobs
     .filter(j => filterSource === "All" || j.source === filterSource)

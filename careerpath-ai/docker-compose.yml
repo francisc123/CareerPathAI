@@ -276,7 +276,7 @@ services:
   minio:
     image: minio/minio:RELEASE.2024-07-16T23-46-41Z
     container_name: cp-minio
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["9005:9000", "9006:9001"]
     environment:
       MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-change_me_minio}

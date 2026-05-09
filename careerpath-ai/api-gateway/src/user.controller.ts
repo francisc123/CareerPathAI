@@ -1,35 +1,28 @@
 import { Controller, All, Req, Res, UseGuards } from '@nestjs/common';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import axios from 'axios';
 
 @Controller('api/users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-    // În interiorul Docker, serviciul Java este accesibil la acest URL
-    private readonly userServiceUrl = 'http://host.docker.internal:8001';
+    private readonly userServiceUrl = 'http://cp-user-service:8001';
 
     @All('*')
     async proxy(@Req() req: Request, @Res() res: Response) {
         const path = req.url.replace('/api/users', '');
         try {
-            const response = await axios({
+            const upstream = await fetch(`${this.userServiceUrl}/api/users${path}`, {
                 method: req.method,
-                url: `${this.userServiceUrl}/api/users${path}`,
-                data: req.body,
                 headers: {
-                    ...req.headers,
-                    // Eliminăm header-ul host original pentru a nu deruta microserviciul
-                    host: 'cp-user-service:8001'
+                    'content-type': 'application/json',
+                    'x-user-id': req.headers['x-user-id'] as string ?? '',
                 },
+                body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
             });
-            res.status(response.status).json(response.data);
+            const data = await upstream.json().catch(() => ({}));
+            res.status(upstream.status).json(data);
         } catch (error) {
-            if (error.response) {
-                res.status(error.response.status).json(error.response.data);
-            } else {
-                res.status(500).json({ message: 'Gateway error: User-Service is unreachable' });
-            }
+            res.status(500).json({ message: 'Gateway error: User-Service is unreachable' });
         }
     }
 }
