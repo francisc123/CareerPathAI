@@ -1,4 +1,4 @@
- from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 import redis.asyncio as redis
 import json
