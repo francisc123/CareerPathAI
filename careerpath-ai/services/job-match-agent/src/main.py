@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .consumer import run_consumer_in_background
 from .database import get_db_pool, get_job_matches_for_user
@@ -20,6 +21,13 @@ app = FastAPI(
     title="Job Match Agent",
     description="Matches scraped jobs with user CVs using vector search and Gemini re-ranking.",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 

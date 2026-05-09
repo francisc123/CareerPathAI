@@ -38,8 +38,8 @@ export const uploadCV = async (file: File): Promise<{ job_id: string }> => {
 // have routes for /api/jobs and /api/learning. Add proxy routes to api-gateway
 // pointing to cp-job-match-agent:8007 and cp-learning-path-agent:8008.
 
-const JOB_AGENT_URL = process.env.NEXT_PUBLIC_JOB_AGENT_URL || 'http://localhost:8007';
-const LEARNING_AGENT_URL = process.env.NEXT_PUBLIC_LEARNING_AGENT_URL || 'http://localhost:8008';
+const JOB_AGENT_URL = process.env.NEXT_PUBLIC_JOB_AGENT_URL || 'http://localhost:8008';
+const LEARNING_AGENT_URL = process.env.NEXT_PUBLIC_LEARNING_AGENT_URL || 'http://localhost:8007';
 
 export interface JobMatch {
   job_title: string;

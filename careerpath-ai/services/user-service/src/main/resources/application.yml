@@ -3,14 +3,14 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/careerpath
-    username: careerpath_user
-    password: change_me_strong_password
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB:careerpath}
+    username: ${POSTGRES_USER:careerpath_user}
+    password: ${POSTGRES_PASSWORD:change_me_strong_password}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -18,4 +18,4 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8484/realms/careerpath
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://cp-keycloak:8080/realms/careerpath}

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .consumer import run_consumer_in_background
 from .database import get_db_pool, get_learning_path
@@ -20,6 +21,13 @@ app = FastAPI(
     title="Learning Path Agent",
     description="Generates personalized learning paths based on CV gaps.",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 
