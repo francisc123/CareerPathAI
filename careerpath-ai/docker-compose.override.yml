@@ -34,17 +34,11 @@ services:
     environment:
       - WATCHPACK_POLLING=true
 
-  # ── User Service — NestJS + Prisma ─────────────────────────────────────────
+  # ── User Service — Java 21 + Spring Boot (no hot-reload in dev) ─────────────
   user-service:
     build:
       context: ./services/user-service
-      target: dev
-    volumes:
-      - ./services/user-service:/app
-      - /app/node_modules
-      - /app/dist
-    environment:
-      - WATCHPACK_POLLING=true
+      target: production
 
   # ── Notification Service — NestJS ───────────────────────────────────────────
   notification-service:
