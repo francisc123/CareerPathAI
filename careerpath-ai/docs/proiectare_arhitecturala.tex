@@ -1,0 +1,843 @@
+% ============================================================
+%  CareerPath AI — Document de Proiectare Arhitecturală
+%  Template academic conform cerințelor universitare
+%  Compile: pdflatex proiectare_arhitecturala.tex (x2)
+% ============================================================
+\documentclass[12pt, a4paper]{report}
+
+% ── Encoding & Language ─────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[romanian]{babel}
+
+% ── Font ────────────────────────────────────────────────────
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ── Page Layout ─────────────────────────────────────────────
+\usepackage[
+  top=2.5cm, bottom=2.5cm,
+  left=3cm,  right=2.5cm,
+  headheight=15pt
+]{geometry}
+\usepackage{fancyhdr}
+\usepackage{emptypage}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Colors ──────────────────────────────────────────────────
+\usepackage[dvipsnames, table]{xcolor}
+\definecolor{primary}{HTML}{2C3E8C}
+\definecolor{accent}{HTML}{1A6EBD}
+\definecolor{lightblue}{HTML}{EBF3FB}
+\definecolor{darkgray}{HTML}{2D2D2D}
+\definecolor{rowgray}{HTML}{F5F5F5}
+\definecolor{success}{HTML}{1E7E34}
+\definecolor{muted}{HTML}{6C757D}
+
+% ── Graphics ────────────────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{
+  shapes.geometric, shapes.rounded corners,
+  arrows.meta, positioning, fit, calc,
+  backgrounds, shadows, decorations.pathreplacing,
+  matrix
+}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% ── Tables ──────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{array}
+\renewcommand{\arraystretch}{1.3}
+
+% ── Boxes ───────────────────────────────────────────────────
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable}
+
+% ── Lists ───────────────────────────────────────────────────
+\usepackage{enumitem}
+
+% ── Hyperlinks ───────────────────────────────────────────────
+\usepackage[hidelinks, unicode]{hyperref}
+\hypersetup{
+  pdftitle={CareerPath AI - Document de Proiectare Arhitecturala},
+  pdfauthor={Rares Constantinescu, Francis, Vlad},
+  bookmarksnumbered=true
+}
+
+% ── Section styling ─────────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\chapter}[block]
+  {\normalfont\large\bfseries\color{primary}\MakeUppercase}
+  {\thechapter.}{0.6em}{}[{\titlerule[0.8pt]}]
+\titlespacing{\chapter}{0pt}{0pt}{12pt}
+
+\titleformat{\section}
+  {\normalfont\normalsize\bfseries\color{primary}}
+  {\thesection.}{0.5em}{}
+\titlespacing{\section}{0pt}{14pt}{6pt}
+
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}
+  {\thesubsection.}{0.5em}{}
+\titlespacing{\subsection}{0pt}{10pt}{4pt}
+
+% ── Header/Footer ───────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{muted} Document de Proiectare Arhitecturală — CareerPath AI}
+\fancyhead[R]{\small\color{muted} \leftmark}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Captions ────────────────────────────────────────────────
+\usepackage{caption}
+\captionsetup{
+  font=small, labelfont=bf,
+  labelsep=period, justification=centering
+}
+
+% ── Code ────────────────────────────────────────────────────
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{muted}\itshape,
+  stringstyle=\color{success},
+  breaklines=true,
+  frame=tb,
+  rulecolor=\color{primary!30},
+  backgroundcolor=\color{lightblue!40},
+  numbers=left, numberstyle=\tiny\color{muted},
+  xleftmargin=15pt, xrightmargin=5pt,
+  aboveskip=8pt, belowskip=8pt
+}
+
+% ── Misc ────────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{pifont}
+\usepackage{fontawesome5}
+
+% ── Custom note box ─────────────────────────────────────────
+\newtcolorbox{notabox}[1][]{
+  colback=lightblue!60, colframe=primary!60,
+  arc=4pt, boxrule=0.6pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\small\bfseries\color{primary},
+  #1
+}
+
+% ============================================================
+\begin{document}
+\selectlanguage{romanian}
+
+% ── COPERTĂ ─────────────────────────────────────────────────
+\begin{titlepage}
+\begin{tikzpicture}[remember picture, overlay]
+  \fill[primary] (current page.north west)
+    rectangle ([yshift=-3.5cm]current page.north east);
+  \fill[accent!70!primary] ([yshift=-3.5cm]current page.north west)
+    rectangle ([yshift=-3.8cm]current page.north east);
+\end{tikzpicture}
+
+\vspace*{1.8cm}
+\begin{center}
+  {\color{white}\Large\bfseries UNIVERSITATEA — FACULTATEA DE INFORMATICĂ}\\[0.3cm]
+  {\color{white!80!gray}\normalsize Proiect Software — 2025/2026}
+\end{center}
+
+\vspace{3cm}
+
+\begin{center}
+  {\color{primary}\rule{14cm}{1.5pt}}\\[0.8cm]
+  {\Huge\bfseries\color{darkgray} CareerPath AI}\\[0.4cm]
+  {\Large\color{accent} Platformă Inteligentă de Dezvoltare a Carierei}\\[0.6cm]
+  {\color{primary}\rule{14cm}{1.5pt}}\\[0.8cm]
+  {\LARGE\bfseries\color{darkgray} DOCUMENT DE PROIECTARE ARHITECTURALĂ}
+\end{center}
+
+\vspace{2.5cm}
+
+\begin{center}
+\begin{tabular}{ll}
+  \textbf{Versiune:}   & 1.0 \\[4pt]
+  \textbf{Data:}       & Aprilie 2026 \\[4pt]
+  \textbf{Autori:}     & Rareș Constantinescu, Francis, Vlad \\[4pt]
+  \textbf{Stare:}      & În dezvoltare \\[4pt]
+  \textbf{Clasificare:}& Uz intern \\
+\end{tabular}
+\end{center}
+
+\vfill
+\begin{center}
+  {\small\color{muted} Acest document descrie arhitectura componentelor implementate\\
+  până în Aprilie 2026 în cadrul proiectului CareerPath AI.}
+\end{center}
+\end{titlepage}
+
+% ── CUPRINS ─────────────────────────────────────────────────
+\tableofcontents
+\clearpage
+
+% ============================================================
+\chapter{Introducere}
+% ============================================================
+
+\section{Scopul sistemului}
+
+CareerPath AI este o platformă web inteligentă orientată pe evenimente, destinată
+sprijinirii utilizatorilor în procesul de dezvoltare a carierei profesionale. Sistemul
+utilizează modele de limbaj de mari dimensiuni (LLM), căutare semantică prin vectori și
+procesare asincronă bazată pe mesagerie pentru a automatiza analiza CV-urilor și
+direcționarea utilizatorilor către oportunități de angajare sau trasee de învățare adaptate.
+
+Scopul prezentului document este de a descrie arhitectura software a componentelor
+implementate până la data curentă, incluzând structura subsistemelor, fluxul de date,
+gestionarea persistenței și controlul accesului.
+
+\textbf{Componente implementate la data redactării:}
+\begin{itemize}[leftmargin=*]
+  \item Infrastructura Docker (PostgreSQL, Redis, Qdrant, Redpanda, Keycloak)
+  \item Frontend — interfață web (Next.js 14): autentificare, înregistrare, dashboard
+  \item API Gateway — punct unic de intrare (NestJS + Fastify)
+  \item User Service — gestionarea utilizatorilor (Java Spring Boot + Keycloak)
+  \item CV Analyzer Agent — analiză CV cu Gemini AI + vector embeddings (FastAPI)
+\end{itemize}
+
+\section{Definiții și Acronime}
+
+\begin{center}
+\rowcolors{2}{rowgray}{white}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\rowcolor{primary!15}
+\textbf{Termen / Acronim} & \textbf{Definiție} \\
+\midrule
+LLM & Large Language Model — model de limbaj de mari dimensiuni \\
+RAG & Retrieval-Augmented Generation — generare augmentată prin recuperare \\
+JWT & JSON Web Token — token compact pentru autentificare \\
+RS256 & Algoritm de semnare JWT bazat pe RSA cu SHA-256 \\
+API & Application Programming Interface — interfață de programare a aplicației \\
+REST & Representational State Transfer — stil arhitectural pentru servicii web \\
+ORM & Object-Relational Mapping — maparea obiectelor pe tabele relaționale \\
+SSE & Server-Sent Events — protocol push unidirecțional HTTP \\
+CV & Curriculum Vitae \\
+Embedding & Reprezentare vectorială densă a unui text în spațiu n-dimensional \\
+Qdrant & Bază de date vectorială open-source pentru căutare semantică \\
+Redpanda & Platformă de streaming compatibilă Kafka \\
+NestJS & Framework Node.js pentru aplicații server-side scalabile \\
+FastAPI & Framework Python modern pentru construirea de API-uri \\
+MinIO & Stocare obiect compatibilă S3 \\
+Keycloak & Soluție open-source pentru Identity \& Access Management (OAuth2/OIDC) \\
+LangGraph & Framework pentru agenți AI stateful multi-pas \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Documente de referință}
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Documentul de Specificare a Cerințelor} — CareerPath AI SRS v1.0, 2026
+  \item \textbf{Documentația oficială Next.js 14} — \url{https://nextjs.org/docs}
+  \item \textbf{Documentația NestJS} — \url{https://docs.nestjs.com}
+  \item \textbf{Documentația FastAPI} — \url{https://fastapi.tiangolo.com}
+  \item \textbf{Google Gemini API} — model \texttt{gemini-2.5-flash}, embedding \texttt{gemini-embedding-001}
+  \item \textbf{Qdrant Documentation} — \url{https://qdrant.tech/documentation}
+  \item \textbf{Redpanda Documentation} — \url{https://docs.redpanda.com}
+  \item \textbf{Keycloak Documentation} — \url{https://www.keycloak.org/documentation}
+  \item \textbf{RFC 7519} — JSON Web Token (JWT) Standard
+  \item \textbf{Fișierul \texttt{docker-compose.yml}} din repository-ul proiectului — definiția infrastructurii
+\end{enumerate}
+
+% ============================================================
+\chapter{Obiective de Proiectare}
+% ============================================================
+
+Arhitectura CareerPath AI a fost concepută pornind de la următoarele obiective principale
+de proiectare:
+
+\begin{enumerate}[leftmargin=*, label=\textbf{OD-\arabic*.}]
+
+  \item \textbf{Separarea responsabilităților (Separation of Concerns)}\\
+  Fiecare serviciu are o singură responsabilitate bine definită. Frontend-ul nu
+  conține logică de business; API Gateway-ul nu accesează baze de date direct;
+  agenții AI nu interacționează niciodată direct cu utilizatorii.
+
+  \item \textbf{Comunicare asincronă prin evenimente}\\
+  Componentele din stratul AI comunică exclusiv prin evenimente Redpanda (Kafka).
+  Niciun apel HTTP direct nu există între agenți, eliminând cuplarea strânsă și
+  permițând scalarea independentă a fiecărui agent.
+
+  \item \textbf{Scalabilitate orizontală}\\
+  Fiecare serviciu rulează în container Docker independent și poate fi scalat
+  orizontal fără modificări arhitecturale. Redpanda suportă nativ partițiile,
+  iar Qdrant suportă clustering.
+
+  \item \textbf{Securitate prin design}\\
+  Autentificarea se realizează cu chei asimetrice RS256. API Gateway-ul injectează
+  identitatea utilizatorului (\texttt{x-user-id}) în toate cererile downstream —
+  serviciile interne nu re-verifică niciodată tokenul JWT.
+
+  \item \textbf{Izolarea datelor pe domenii}\\
+  Fiecare serviciu accesează exclusiv tabelele sale din baza de date. Schimbul de
+  date între servicii se face exclusiv prin evenimente Redpanda, nu prin acces
+  direct la baza de date a altui serviciu.
+
+  \item \textbf{Observabilitate și mentenanță}\\
+  Fiecare serviciu expune un endpoint \texttt{/health} standardizat. Hot-reload
+  este configurat pentru toate serviciile în modul de dezvoltare, minimizând
+  ciclurile de rebuild.
+
+  \item \textbf{Reproductibilitate a mediului}\\
+  Întreaga infrastructură este definită declarativ în \texttt{docker-compose.yml}.
+  Profilurile Docker (\texttt{frontend}, \texttt{backend}, \texttt{agents}) permit
+  fiecărui dezvoltator să pornească exclusiv subsistemul relevant.
+
+\end{enumerate}
+
+% ============================================================
+\chapter{Arhitectura Propusă}
+% ============================================================
+
+\section{Prezentarea generală a arhitecturii sistemului}
+
+Sistemul CareerPath AI adoptă o arhitectură pe două straturi, bazată pe microservicii
+și comunicare orientată pe evenimente:
+
+\begin{notabox}[title={Principiu arhitectural fundamental}]
+\textbf{Stratul 1} (conversațional) interacționează cu utilizatorul prin HTTP/WebSocket.
+\textbf{Stratul 2} (worker agents) procesează în background și comunică exclusiv
+prin topicuri Redpanda. Cele două straturi nu se apelează direct niciodată.
+\end{notabox}
+
+\vspace{0.5cm}
+
+\textbf{Subsistemele implementate și funcționalitățile alocate:}
+
+\begin{center}
+\rowcolors{2}{rowgray}{white}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\rowcolor{primary!15}
+\textbf{Subsistem} & \textbf{Strat} & \textbf{Funcționalități alocate} \\
+\midrule
+Frontend (Next.js) & Prezentare & Autentificare, înregistrare, dashboard utilizator, gestionare sesiune \\
+API Gateway (NestJS) & Gateway & Rutare, autentificare JWT, CORS, proxy spre servicii interne \\
+User Service (Spring) & Core & Gestionare profil utilizator, integrare Keycloak OAuth2 \\
+CV Analyzer Agent & AI/Worker & Scorare CV, analiză gap, generare embeddings, publicare rezultate \\
+PostgreSQL & Date & Persistență utilizatori, upload-uri CV, sesiuni \\
+Redis & Date & Cache sesiuni JWT, rate limiting \\
+Qdrant & Date & Stocare și căutare vectori (embeddings CV/joburi) \\
+Redpanda & Mesagerie & Bus de evenimente între servicii \\
+Keycloak & Securitate & Identity Provider OAuth2/OIDC, emitere tokeni \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Diagrama generală a arhitecturii}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  svc/.style={
+    rounded corners=5pt, minimum width=3.4cm, minimum height=1.1cm,
+    inner sep=7pt, font=\small\bfseries, align=center, drop shadow
+  },
+  db/.style={
+    cylinder, shape border rotate=90,
+    minimum width=1.6cm, minimum height=1.4cm,
+    inner sep=3pt, font=\footnotesize\bfseries, align=center
+  },
+  arr/.style={-Stealth, thick, color=primary},
+  karr/.style={-Stealth, thick, dashed, color=orange!70!black},
+  lbl/.style={font=\tiny, color=muted}
+]
+
+% Stratul prezentare
+\node[svc, fill=darkgray!90, text=white] (fe) at (0, 5) {Frontend\\{\footnotesize Next.js 14}};
+\node[above=0.1cm of fe, font=\footnotesize\bfseries\color{muted}] {Strat Prezentare};
+
+% Gateway
+\node[svc, fill=red!15, draw=red!50] (gw) at (0, 3) {API Gateway\\{\footnotesize NestJS + Fastify}};
+\node[above right=0.05cm and 0.3cm of gw, font=\footnotesize\color{muted}] {:8000};
+
+% Core services
+\node[svc, fill=blue!12, draw=blue!50] (us) at (-3.5, 1) {User Service\\{\footnotesize Spring Boot}};
+\node[above right=0.05cm and 0.1cm of us, font=\footnotesize\color{muted}] {:8001};
+
+% AI Agent
+\node[svc, fill=accent!15, draw=accent] (cva) at (3.5, 1) {CV Analyzer\\{\footnotesize FastAPI + Gemini}};
+\node[above right=0.05cm and 0.1cm of cva, font=\footnotesize\color{muted}] {:8006};
+
+% Redpanda
+\node[svc, fill=orange!15, draw=orange!60, minimum width=8cm] (rp) at (0, -1.2) {
+  Redpanda — Event Bus (Kafka-compatible)\\{\footnotesize topicuri: cv.uploaded, cv.analyzed}
+};
+
+% Databases
+\node[db, fill=blue!10, draw=blue!40] (pg) at (-5.5, -0.2) {Postgres\\:5432};
+\node[db, fill=red!10, draw=red!40] (redis) at (-4, -0.2) {Redis\\:6379};
+\node[db, fill=purple!10, draw=purple!40] (qd) at (5.5, -0.2) {Qdrant\\:6333};
+\node[db, fill=orange!10, draw=orange!40] (kc) at (-5.5, 3) {Keycloak\\:8484};
+
+% Arrows
+\draw[arr] (fe) -- node[lbl,right]{HTTP/HTTPS} (gw);
+\draw[arr] (gw) -- node[lbl,above]{\texttt{x-user-id}} (us);
+\draw[arr] (gw) -- node[lbl,above]{proxy} (cva);
+\draw[arr] (us) -- (pg);
+\draw[arr] (us) -- (redis);
+\draw[arr] (gw) to[bend right=15] node[lbl,right]{validate} (kc);
+\draw[karr] (cva) -- node[lbl,right]{consume/produce} (rp);
+\draw[arr] (cva) -- node[lbl,right]{store} (qd);
+
+% Legenda
+\node[arr, draw=primary, fill=primary, minimum width=0.5cm, minimum height=0.1cm] at (-1,-2.8) {};
+\node[right] at (-0.7,-2.8) {\footnotesize HTTP / REST};
+\node[draw=orange!70!black, fill=orange!10, minimum width=0.5cm, minimum height=0.1cm, dashed] at (2,-2.8) {};
+\node[right] at (2.3,-2.8) {\footnotesize Kafka event};
+
+\end{tikzpicture}
+\caption{Diagrama generală a arhitecturii CareerPath AI (componente implementate)}
+\end{figure}
+
+\section{Descompunerea în subsisteme și responsabilități}
+
+\subsection{Frontend — Next.js 14}
+
+\textbf{Responsabilitate:} Interfața grafică cu utilizatorul. Gestionează sesiunea de
+autentificare local prin Zustand cu persistență în \texttt{localStorage}.
+
+\textbf{Componente implementate:}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{/login} — formular de autentificare cu validare Zod + React Hook Form
+  \item \texttt{/register} — formular de înregistrare cu validare și redirect post-succes
+  \item \texttt{/dashboard} — panou principal cu guard de autentificare
+  \item \texttt{auth.store.ts} — store Zustand cu persistență JWT în localStorage
+  \item \texttt{api-client.ts} — client Axios configurat cu \texttt{baseURL = http://localhost:8000/api}
+\end{itemize}
+
+\textbf{Interfețe expuse:}
+\begin{itemize}[leftmargin=*]
+  \item Consumă: \texttt{POST /api/auth/login}, \texttt{POST /api/auth/register}, \texttt{GET /api/auth/me}
+  \item Nu expune niciun endpoint propriu
+\end{itemize}
+
+\textbf{Pachete principale:}
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Pachet} & \textbf{Rol} \\
+\midrule
+\texttt{next} 14 & Framework React cu App Router și SSR \\
+\texttt{zustand} & State management global cu middleware persist \\
+\texttt{axios} & Client HTTP cu interceptori \\
+\texttt{react-hook-form} + \texttt{zod} & Validare formulare \\
+\texttt{tailwindcss} + \texttt{shadcn/ui} & Sistem de design și componente UI \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{API Gateway — NestJS + Fastify}
+
+\textbf{Responsabilitate:} Punct unic de intrare pentru toate cererile HTTP din frontend.
+Validează JWT-ul RS256, injectează \texttt{x-user-id} și rutează cererile spre serviciile interne.
+
+\textbf{Componente implementate:}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{AuthController} — \texttt{POST /api/auth/login}, \texttt{POST /api/auth/register},
+        \texttt{GET /api/auth/me}; semnează tokeni RS256 cu cheia privată din \texttt{/app/keys/private.pem}
+  \item \texttt{UsersController} — proxy transparent spre \texttt{cp-user-service:8001}
+  \item \texttt{JwtAuthGuard} — verifică semnătura RS256 cu cheia publică din \texttt{/app/keys/public.pem}
+  \item \texttt{app.enableCors(\{origin: http://localhost:3000\})} — CORS configurat
+\end{itemize}
+
+\textbf{Interfețe expuse:}
+
+\begin{center}
+\rowcolors{2}{rowgray}{white}
+\begin{tabular}{llll}
+\toprule
+\rowcolor{primary!15}
+\textbf{Metodă} & \textbf{Cale} & \textbf{Auth} & \textbf{Descriere} \\
+\midrule
+POST & \texttt{/api/auth/register} & Nu & Creează cont, returnează JWT \\
+POST & \texttt{/api/auth/login} & Nu & Autentificare, returnează JWT \\
+GET  & \texttt{/api/auth/me} & Da & Returnează profilul din token \\
+ALL  & \texttt{/api/users/*} & Da & Proxy spre User Service \\
+GET  & \texttt{/health} & Nu & Stare serviciu \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{User Service — Java Spring Boot}
+
+\textbf{Responsabilitate:} Gestionarea profilurilor utilizatorilor și validarea identității
+prin Keycloak. Accesează exclusiv tabelele \texttt{users} și \texttt{cv\_uploads} din PostgreSQL.
+
+\textbf{Componente implementate:}
+\begin{itemize}[leftmargin=*]
+  \item Securitate OAuth2 Resource Server cu Keycloak ca Identity Provider
+  \item Endpoint-uri profil utilizator (\texttt{/api/users/profile})
+  \item Conexiune PostgreSQL prin Spring Data JPA
+  \item Variabile de mediu pentru configurare dinamică (fără hardcodare \texttt{localhost})
+\end{itemize}
+
+\subsection{CV Analyzer Agent — FastAPI}
+
+\textbf{Responsabilitate:} Unicul agent AI implementat. Consumă evenimentul \texttt{cv.uploaded}
+din Redpanda, aplică scorarea CV prin Gemini 2.5 Flash, generează embeddings și publică
+rezultatul pe \texttt{cv.analyzed}.
+
+\textbf{Componente implementate:}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{cv\_upload\_consumer.py} — consumator aiokafka topic \texttt{cv.uploaded}
+  \item \texttt{cv\_analyzer.py} — agent Gemini cu prompt din \texttt{prompts/cv\_scoring.txt}
+  \item \texttt{embedding\_tool.py} — generare embeddings cu \texttt{gemini-embedding-001} (dim=3072)
+  \item \texttt{qdrant\_client.py} — stocare și căutare vectori în colecția \texttt{cv\_embeddings}
+  \item \texttt{cv\_analyzed\_publisher.py} — producător aiokafka topic \texttt{cv.analyzed}
+  \item \texttt{cv\_repository.py} — persistență scor în PostgreSQL
+  \item \texttt{/health} — verificare stare Gemini API, Kafka producer, Qdrant, DB pool
+\end{itemize}
+
+\subsection{Distribuția subsistemelor pe platforme}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  host/.style={rounded corners=6pt, fill=gray!10, draw=gray!50,
+               inner sep=12pt, minimum width=5cm},
+  cont/.style={rounded corners=4pt, inner sep=6pt, font=\footnotesize\bfseries,
+               minimum width=4cm, minimum height=0.8cm, align=center}
+]
+  % Host machine
+  \node[host, minimum width=16cm, minimum height=9cm] (host) at (7,0) {};
+  \node[above=0.1cm, font=\small\bfseries\color{muted}] at (host.north) {Host Machine (Windows 11 / Linux)};
+
+  % Docker network
+  \node[rounded corners=4pt, fill=blue!5, draw=blue!30,
+        inner sep=10pt, minimum width=14cm, minimum height=7cm] (docker) at (7,-0.5) {};
+  \node[above=0.1cm, font=\footnotesize\color{blue!60}] at (docker.north) {Docker Network: careerpath-ai\_internal-net};
+
+  % Containers
+  \node[cont, fill=darkgray!85, text=white] at (2, 1.5) {frontend:3000};
+  \node[cont, fill=red!15, draw=red!40] at (6.5, 1.5) {api-gateway:8000};
+  \node[cont, fill=blue!12, draw=blue!40] at (11, 1.5) {user-service:8001};
+  \node[cont, fill=accent!15, draw=accent] at (2, 0) {cv-analyzer:8006};
+  \node[cont, fill=blue!10, draw=blue!30] at (6.5, 0) {postgres:5432};
+  \node[cont, fill=red!10, draw=red!30] at (11, 0) {redis:6379};
+  \node[cont, fill=purple!10, draw=purple!40] at (2, -1.5) {qdrant:6333};
+  \node[cont, fill=orange!10, draw=orange!40] at (6.5, -1.5) {redpanda:9092};
+  \node[cont, fill=orange!8, draw=orange!30] at (11, -1.5) {keycloak:8484};
+
+\end{tikzpicture}
+\caption{Distribuția containerelor Docker pe platforma hardware}
+\end{figure}
+
+\section{Managementul datelor persistente}
+
+\subsection{Sistemul de baze de date}
+
+Platforma utilizează \textbf{patru sisteme de stocare} distincte, fiecare optimizat
+pentru tipul de date gestionat:
+
+\begin{center}
+\rowcolors{2}{rowgray}{white}
+\begin{tabularx}{\textwidth}{llXl}
+\toprule
+\rowcolor{primary!15}
+\textbf{Sistem} & \textbf{Tip} & \textbf{Date gestionate} & \textbf{Port} \\
+\midrule
+PostgreSQL 16 & Relațional & Utilizatori, upload-uri CV, sesiuni & 5432 \\
+Redis 7 & Key-Value & Cache JWT, rate limiting (TTL) & 6379 \\
+Qdrant v1.10 & Vectorial & Embeddings CV (dim=3072, Cosine) & 6333 \\
+Redpanda & Streaming & Evenimente între servicii (log durabil) & 9092 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Schema conceptuală a bazei de date PostgreSQL}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  tbl/.style={rounded corners=4pt, draw=primary!60, fill=lightblue!40,
+              inner sep=0, font=\footnotesize},
+  hdr/.style={fill=primary!20, font=\footnotesize\bfseries, inner sep=5pt,
+              minimum width=5cm},
+  row/.style={inner sep=4pt, minimum width=5cm, font=\footnotesize\ttfamily},
+  pk/.style={row, font=\footnotesize\ttfamily\bfseries\color{primary}},
+  fk/.style={row, font=\footnotesize\ttfamily\color{accent}}
+]
+
+% Table: users
+\matrix[tbl, matrix of nodes, nodes in empty cells,
+  row 1/.style={hdr}, row 2/.style={pk}, row 3/.style={row},
+  row 4/.style={row}, row 5/.style={row}, row 6/.style={row}
+] (users) at (0,0) {
+  users \\
+  id : UUID PK \\
+  email : VARCHAR UNIQUE \\
+  name : VARCHAR \\
+  role : VARCHAR \\
+  created\_at : TIMESTAMP \\
+};
+
+% Table: cv_uploads
+\matrix[tbl, matrix of nodes, nodes in empty cells,
+  row 1/.style={hdr}, row 2/.style={pk}, row 3/.style={fk},
+  row 4/.style={row}, row 5/.style={row}, row 6/.style={row}
+] (cvuploads) at (7,0) {
+  cv\_uploads \\
+  id : UUID PK \\
+  user\_id : UUID FK \\
+  file\_path : TEXT \\
+  score : INTEGER \\
+  uploaded\_at : TIMESTAMP \\
+};
+
+% Relationship
+\draw[-Stealth, thick, color=accent]
+  (users.east) -- node[above, font=\tiny\color{muted}]{1 \ \ \ \ \ N} (cvuploads.west);
+
+\end{tikzpicture}
+\caption{Schema conceptuală a bazei de date PostgreSQL (tabele implementate)}
+\end{figure}
+
+\subsection{Colecțiile Qdrant}
+
+Qdrant stochează reprezentările vectoriale ale CV-urilor pentru căutare semantică:
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Colecție} & \textbf{Dimensiune} & \textbf{Metrică} & \textbf{Model embedding} \\
+\midrule
+\texttt{cv\_embeddings} & 3072 & Cosine & \texttt{gemini-embedding-001} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Strategia de persistență Redis}
+
+Redis este utilizat exclusiv ca cache cu TTL (Time-To-Live) pentru:
+\begin{itemize}[leftmargin=*]
+  \item Starea sesiunilor JWT (invalidare forțată la logout)
+  \item Rate limiting per IP/utilizator la nivelul API Gateway
+\end{itemize}
+Datele din Redis sunt volatile — pierderea lor nu afectează integritatea sistemului.
+
+\section{Controlul accesului utilizatorilor la sistem}
+
+\subsection{Modelul de autentificare}
+
+Sistemul utilizează autentificare bazată pe \textbf{JWT RS256} cu chei asimetrice:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  svc/.style={rounded corners=5pt, inner sep=8pt, minimum width=3cm,
+              minimum height=1cm, font=\small\bfseries, align=center},
+  arr/.style={-Stealth, thick, color=primary},
+  lbl/.style={font=\tiny, color=muted, midway}
+]
+  \node[svc, fill=gray!15, draw=gray!50] (usr) at (0,0) {\faUser\\Utilizator};
+  \node[svc, fill=red!10, draw=red!40] (gw)  at (4.5,0) {API Gateway\\NestJS};
+  \node[svc, fill=orange!10, draw=orange!40] (kc) at (9,0) {Keycloak\\:8484};
+  \node[svc, fill=blue!10, draw=blue!40] (ds)  at (6.5,-2.5) {Serviciu\\intern};
+
+  \draw[arr] (usr) -- node[above,lbl]{1. credentials} (gw);
+  \draw[arr] (gw)  -- node[above,lbl]{2. validate} (kc);
+  \draw[arr, dashed] (kc) -- node[below,lbl]{3. JWKS public key} (gw);
+  \draw[arr, dashed] (gw) to[bend right=30]
+    node[left,lbl]{4. JWT RS256} (usr);
+  \draw[arr] (gw)  -- node[right,lbl]{5. x-user-id header} (ds);
+\end{tikzpicture}
+\caption{Fluxul de autentificare RS256}
+\end{figure}
+
+\textbf{Principii de securitate implementate:}
+\begin{enumerate}[leftmargin=*]
+  \item Cheia privată (\texttt{private.pem}) semnează tokenul — se află exclusiv în API Gateway
+  \item Cheia publică (\texttt{public.pem}) verifică tokenul — distribuită tuturor serviciilor
+  \item Serviciile interne \textbf{nu re-verifică} tokenul JWT — acceptă \texttt{x-user-id} injectat
+  \item Tokenul expiră în \textbf{15 minute}; reîmprospătarea nu este implementată încă
+  \item CORS restricționat la \texttt{http://localhost:3000} în development
+\end{enumerate}
+
+\subsection{Niveluri de acces}
+
+\begin{center}
+\rowcolors{2}{rowgray}{white}
+\begin{tabular}{lll}
+\toprule
+\rowcolor{primary!15}
+\textbf{Resursă} & \textbf{Acces anonim} & \textbf{Acces autentificat} \\
+\midrule
+\texttt{POST /api/auth/register} & Da & Da \\
+\texttt{POST /api/auth/login}    & Da & Da \\
+\texttt{GET /health}             & Da & Da \\
+\texttt{GET /api/auth/me}        & Nu & Da \\
+\texttt{/api/users/*}            & Nu & Da \\
+\texttt{/dashboard} (frontend)   & Redirect /login & Da \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Fluxul global al controlului}
+
+\subsection{Fluxul de autentificare și acces dashboard}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  step/.style={rounded corners=4pt, fill=lightblue!60, draw=primary!40,
+               inner sep=8pt, minimum width=4cm, minimum height=0.9cm,
+               font=\small, align=center},
+  dec/.style={diamond, fill=orange!15, draw=orange!60,
+              inner sep=3pt, font=\small\bfseries, aspect=2.5},
+  arr/.style={-Stealth, thick, color=primary},
+  lbl/.style={font=\tiny\color{muted}}
+]
+  \node[step] (s1) at (0,0) {Utilizator accesează\\aplicația (\texttt{localhost:3000})};
+  \node[dec]  (d1) at (0,-1.8) {JWT în\\localStorage?};
+  \node[step] (s2) at (-3.5,-3.5) {Redirect\\la \texttt{/login}};
+  \node[step] (s3) at (3.5,-3.5) {Redirect\\la \texttt{/dashboard}};
+  \node[step] (s4) at (-3.5,-5.5) {\texttt{POST /api/auth/login}\\sau \texttt{/register}};
+  \node[step] (s5) at (-3.5,-7.5) {API Gateway semnează\\JWT RS256};
+  \node[step] (s6) at (3.5,-7.5) {Frontend apelează\\\texttt{GET /api/auth/me}};
+  \node[step] (s7) at (3.5,-9.5) {Dashboard randat\\cu date utilizator};
+
+  \draw[arr] (s1) -- (d1);
+  \draw[arr] (d1) -- node[lbl,left]{Nu} (s2);
+  \draw[arr] (d1) -- node[lbl,right]{Da} (s3);
+  \draw[arr] (s2) -- (s4);
+  \draw[arr] (s4) -- (s5);
+  \draw[arr] (s5.south) -- ++(0,-0.5) -| node[lbl,above]{JWT + user} (s3.south);
+  \draw[arr] (s3) -- (s6);
+  \draw[arr] (s6) -- (s7);
+\end{tikzpicture}
+\caption{Fluxul de control autentificare și acces dashboard}
+\end{figure}
+
+\subsection{Fluxul de analiză CV (implementat parțial)}
+
+Fluxul de analiză CV este implementat la nivel de agent, dar nu este declanșat
+din frontend deoarece \texttt{cv-service} (extragere PDF) nu este încă finalizat.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  step/.style={rounded corners=4pt, inner sep=8pt, minimum width=3.8cm,
+               minimum height=0.9cm, font=\small, align=center},
+  arr/.style={-Stealth, thick},
+  karr/.style={-Stealth, thick, dashed, color=orange!70!black}
+]
+  \node[step, fill=gray!15, draw=gray!50] (cv) at (0,0) {CV PDF primit\\(cv-service)};
+  \node[step, fill=orange!10, draw=orange!50] (t1) at (5,0)
+    {\texttt{cv.uploaded}\\topic Redpanda};
+  \node[step, fill=accent!12, draw=accent] (agent) at (10,0)
+    {CV Analyzer Agent\\Gemini 2.5 Flash};
+  \node[step, fill=purple!10, draw=purple!40] (qd) at (10,-2)
+    {Qdrant\\cv\_embeddings};
+  \node[step, fill=blue!10, draw=blue!40] (pg) at (10,-4)
+    {PostgreSQL\\cv\_uploads.score};
+  \node[step, fill=orange!10, draw=orange!50] (t2) at (5,-2)
+    {\texttt{cv.analyzed}\\topic Redpanda};
+
+  \draw[-Stealth, thick, color=gray!60] (cv) --
+    node[above,font=\tiny\color{muted}]{produce} (t1);
+  \draw[karr] (t1) --
+    node[above,font=\tiny\color{muted}]{consume} (agent);
+  \draw[-Stealth, thick, color=purple!60] (agent) --
+    node[right,font=\tiny\color{muted}]{store embedding} (qd);
+  \draw[-Stealth, thick, color=blue!60] (agent) --
+    node[right,font=\tiny\color{muted}]{save score} (pg);
+  \draw[karr] (agent) --
+    node[above,font=\tiny\color{muted}]{produce} (t2);
+
+  % Not implemented label
+  \node[fill=red!10, draw=red!40, rounded corners=3pt,
+        font=\tiny\bfseries\color{red!60}, inner sep=3pt]
+    at (0,0.9) {neimplementat încă};
+\end{tikzpicture}
+\caption{Fluxul de analiză CV prin pipeline-ul Redpanda}
+\end{figure}
+
+\section{Condițiile limită}
+
+\subsection{Condiții de inițializare}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Pornire la rece:} Serviciile cu dependențe de infrastructură
+        (user-service, cv-analyzer-agent) implementează retry logic — dacă PostgreSQL
+        sau Redpanda nu sunt disponibile la startup, serviciul reîncearcă cu backoff
+        exponențial.
+  \item \textbf{Chei JWT lipsă:} Dacă fișierele \texttt{private.pem} / \texttt{public.pem}
+        lipsesc, API Gateway-ul pornește dar orice request protejat returnează \texttt{500}.
+        Generarea cheilor se face cu \texttt{make keys}.
+  \item \textbf{Volum Redpanda corupt:} Dacă Redpanda eșuează cu exit code 132
+        (instrucțiune invalidă), volumul \texttt{careerpath-ai\_redpanda\_data} trebuie
+        șters și recreat.
+\end{itemize}
+
+\subsection{Condiții de oprire}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Oprire gracefully:} \texttt{docker compose down} trimite \texttt{SIGTERM}
+        tuturor containerelor. Consumatorii Kafka (aiokafka) confirmă ultimul offset
+        înainte de oprire.
+  \item \textbf{Pierdere Redis:} Sesiunile active sunt pierdute; utilizatorii trebuie
+        să se re-autentifice. JWT-ul rămas valid în browser funcționează până la expirare.
+  \item \textbf{Pierdere Qdrant:} Embeddings-urile existente sunt pierdute; CV-urile
+        trebuie re-procesate. Datele relaționale din PostgreSQL nu sunt afectate.
+\end{itemize}
+
+\subsection{Condiții de eroare}
+
+\begin{center}
+\rowcolors{2}{rowgray}{white}
+\begin{tabularx}{\textwidth}{lXl}
+\toprule
+\rowcolor{primary!15}
+\textbf{Condiție} & \textbf{Comportament} & \textbf{HTTP} \\
+\midrule
+JWT expirat & JwtAuthGuard returnează Unauthorized & 401 \\
+JWT invalid/lipsă & JwtAuthGuard returnează Unauthorized & 401 \\
+User Service indisponibil & API Gateway returnează Gateway Error & 500 \\
+Gemini API key lipsă & CV Analyzer returnează eroare internă & 500 \\
+Port ocupat (ex. 9000) & Container MinIO eșuează; restul neafectat & — \\
+CORS origine neautorizată & Browser blochează cererea & — \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Limitări cunoscute ale implementării curente}
+
+\begin{enumerate}[leftmargin=*, label=\textbf{L\arabic*.}]
+  \item JWT-ul nu are mecanism de refresh — expiră în 15 minute, necesitând re-login
+  \item \texttt{POST /api/auth/register} nu persistă utilizatorul în baza de date
+        (implementarea actuală a API Gateway-ului generează token în memorie; persistența
+        este responsabilitatea User Service-ului, integrare în curs)
+  \item CV Analyzer Agent nu poate fi declanșat din UI deoarece cv-service (upload PDF)
+        nu este finalizat
+  \item MinIO (stocare fișiere CV) intră în conflict cu portul 9000 pe mașina de
+        dezvoltare dacă IntelliJ IDEA este activ
+\end{enumerate}
+
+% ── Final ────────────────────────────────────────────────────
+\clearpage
+\begin{center}
+\vspace*{3cm}
+{\color{primary}\rule{10cm}{1pt}}\\[0.8cm]
+{\large\bfseries\color{darkgray} CareerPath AI}\\[0.3cm]
+{\color{muted} Document de Proiectare Arhitecturală — v1.0}\\[0.3cm]
+{\small\color{muted} Rareș Constantinescu $\cdot$ Francis $\cdot$ Vlad $\cdot$ Aprilie 2026}\\[0.6cm]
+{\color{primary}\rule{10cm}{1pt}}
+\end{center}
+
+\end{document}

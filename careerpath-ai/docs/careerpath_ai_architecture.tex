@@ -1,0 +1,1137 @@
+% ============================================================
+%  CareerPath AI — Enterprise Architecture Document
+%  Compile with: pdflatex -shell-escape careerpath_ai_architecture.tex
+%  Requires: texlive-full or MiKTeX with all packages
+% ============================================================
+\documentclass[12pt, a4paper]{report}
+
+% ── Encoding & Language ─────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[romanian,english]{babel}
+
+% ── Fonts ───────────────────────────────────────────────────
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ── Page Layout ─────────────────────────────────────────────
+\usepackage[
+  top=2.5cm, bottom=2.5cm,
+  left=2.8cm, right=2.8cm,
+  headheight=15pt
+]{geometry}
+\usepackage{fancyhdr}
+\usepackage{emptypage}
+
+% ── Colors ──────────────────────────────────────────────────
+\usepackage[dvipsnames, table]{xcolor}
+\definecolor{primary}{HTML}{6C63FF}
+\definecolor{secondary}{HTML}{3ECFCF}
+\definecolor{accent}{HTML}{FF6584}
+\definecolor{dark}{HTML}{0F0F1A}
+\definecolor{darkgray}{HTML}{1E1E2E}
+\definecolor{midgray}{HTML}{2A2A3E}
+\definecolor{lightgray}{HTML}{F4F4F8}
+\definecolor{textgray}{HTML}{6B7280}
+\definecolor{success}{HTML}{10B981}
+\definecolor{warning}{HTML}{F59E0B}
+\definecolor{nestjs}{HTML}{E0234E}
+\definecolor{fastapi}{HTML}{009688}
+\definecolor{java}{HTML}{007396}
+\definecolor{nextjs}{HTML}{000000}
+\definecolor{kafka}{HTML}{231F20}
+
+% ── Graphics & Diagrams ─────────────────────────────────────
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{
+  shapes.geometric, shapes.rounded corners, shapes.multipart,
+  arrows.meta, positioning, fit, calc,
+  backgrounds, shadows, patterns,
+  decorations.pathreplacing, decorations.markings,
+  matrix, chains
+}
+\usepackage{pgfplotstable}
+
+% ── Tables ──────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{array}
+
+% ── Lists & Boxes ───────────────────────────────────────────
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins, breakable, theorems, listings}
+
+% ── Code ────────────────────────────────────────────────────
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{primary}\bfseries,
+  commentstyle=\color{textgray}\itshape,
+  stringstyle=\color{secondary},
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{midgray},
+  backgroundcolor=\color{darkgray!10},
+  numbers=left,
+  numberstyle=\tiny\color{textgray},
+  xleftmargin=15pt
+}
+
+% ── Hyperlinks ───────────────────────────────────────────────
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+  pdftitle={CareerPath AI — Enterprise Architecture},
+  pdfauthor={Rareș, Francis, Vlad},
+  colorlinks=false
+}
+
+% ── Section Styling ─────────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{primary}}
+  {\chaptertitlename\ \thechapter}{10pt}{\Huge}
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{primary!80!black}}{}{0em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{dark}}{}{0em}{}
+
+% ── Header / Footer ─────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{textgray}\textit{CareerPath AI — Enterprise Architecture}}
+\fancyhead[R]{\small\color{textgray}\textit{\leftmark}}
+\fancyfoot[C]{\small\color{textgray}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{primary}\leaders\hrule height\headrulewidth\hfill}}
+
+% ── Caption ─────────────────────────────────────────────────
+\usepackage{caption}
+\captionsetup{font=small, labelfont={bf,color=primary}, labelsep=period}
+
+% ── Misc ────────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{pifont}
+\usepackage{fontawesome5}
+
+% ── Custom Commands ─────────────────────────────────────────
+\newcommand{\badge}[2]{%
+  \tcbox[on line, colback=#1, colframe=#1, colupper=white,
+    boxsep=1pt, left=4pt, right=4pt, top=1pt, bottom=1pt,
+    fontupper=\bfseries\footnotesize, arc=3pt]{\strut #2}%
+}
+\newcommand{\servicebadge}[1]{\badge{primary}{#1}}
+\newcommand{\techbadge}[1]{\badge{darkgray}{#1}}
+\newcommand{\statusbadge}[1]{\badge{success}{#1}}
+
+% ============================================================
+\begin{document}
+\selectlanguage{english}
+
+% ── COVER PAGE ──────────────────────────────────────────────
+\begin{titlepage}
+\pagecolor{dark}
+\color{white}
+\begin{tikzpicture}[remember picture, overlay]
+  % Background gradient boxes
+  \fill[primary, opacity=0.15]
+    (current page.north west) rectangle
+    ([yshift=-8cm]current page.north east);
+  % Decorative circles
+  \fill[primary, opacity=0.08] ([xshift=12cm,yshift=-3cm]current page.north west) circle (5cm);
+  \fill[secondary, opacity=0.06] ([xshift=2cm,yshift=-12cm]current page.north east) circle (7cm);
+  \fill[accent, opacity=0.05] ([xshift=8cm,yshift=4cm]current page.south west) circle (4cm);
+  % Top accent line
+  \fill[primary] ([yshift=-0.4cm]current page.north west)
+    rectangle ([yshift=0cm]current page.north east);
+  % Bottom accent line
+  \fill[primary, opacity=0.6] ([yshift=1.2cm]current page.south west)
+    rectangle ([yshift=1.6cm]current page.south east);
+\end{tikzpicture}
+
+\vspace*{2cm}
+\begin{center}
+
+% Logo / Icon area
+\begin{tikzpicture}
+  \node[circle, fill=primary, minimum size=3.5cm,
+        inner sep=0, drop shadow={shadow xshift=0.2cm, shadow yshift=-0.2cm, opacity=0.5}]
+    (logo) {};
+  \node[at=(logo), font=\fontsize{48}{48}\selectfont] {\faRocket};
+\end{tikzpicture}
+
+\vspace{1.2cm}
+{\fontsize{44}{50}\selectfont\bfseries\color{white} CareerPath}
+{\fontsize{44}{50}\selectfont\bfseries\color{primary} AI}
+
+\vspace{0.5cm}
+\textcolor{secondary}{\rule{8cm}{1.5pt}}
+
+\vspace{0.6cm}
+{\Large\color{white!80!gray}\itshape Enterprise Architecture \& Technical Specification}
+
+\vspace{1.4cm}
+
+\begin{tcolorbox}[
+  colback=midgray, colframe=primary, arc=6pt,
+  width=14cm, boxrule=1pt,
+  left=10pt, right=10pt, top=8pt, bottom=8pt
+]
+  \centering
+  \begin{tabular}{@{}lll@{}}
+    \faUser\ \textbf{Rareș} & AI Agents \& Vector Search & \badge{primary}{Lead AI} \\[6pt]
+    \faUser\ \textbf{Francis} & Backend \& Infrastructure & \badge{fastapi}{Lead BE} \\[6pt]
+    \faUser\ \textbf{Vlad} & Frontend \& UX & \badge{secondary!60!black}{Lead FE} \\
+  \end{tabular}
+\end{tcolorbox}
+
+\vspace{1.6cm}
+
+\begin{tabular}{ccc}
+  \begin{tikzpicture}
+    \node[fill=midgray, rounded corners=6pt, inner sep=10pt, minimum width=3.5cm] {%
+      \begin{tabular}{c}
+        \textcolor{primary}{\Large\bfseries v1.0}\\[2pt]
+        \textcolor{white!60!gray}{\small Version}
+      \end{tabular}};
+  \end{tikzpicture}
+  &\quad\quad&
+  \begin{tikzpicture}
+    \node[fill=midgray, rounded corners=6pt, inner sep=10pt, minimum width=3.5cm] {%
+      \begin{tabular}{c}
+        \textcolor{secondary}{\Large\bfseries 2026}\\[2pt]
+        \textcolor{white!60!gray}{\small Year}
+      \end{tabular}};
+  \end{tikzpicture}
+  &\quad\quad&
+  \begin{tikzpicture}
+    \node[fill=midgray, rounded corners=6pt, inner sep=10pt, minimum width=3.5cm] {%
+      \begin{tabular}{c}
+        \textcolor{accent}{\Large\bfseries CONFIDENTIAL}\\[2pt]
+        \textcolor{white!60!gray}{\small Classification}
+      \end{tabular}};
+  \end{tikzpicture}
+\end{tabular}
+
+\vfill
+{\small\color{white!50!gray} Generated April 2026 $\cdot$ CareerPath AI Team}
+\end{center}
+\end{titlepage}
+\pagecolor{white}
+\color{black}
+
+% ── TABLE OF CONTENTS ────────────────────────────────────────
+\tableofcontents
+\clearpage
+
+% ============================================================
+\chapter{Executive Summary}
+% ============================================================
+
+\begin{tcolorbox}[
+  colback=primary!6!white, colframe=primary, arc=6pt,
+  title={\faInfoCircle\quad Platform Overview},
+  fonttitle=\bfseries\color{white},
+  coltitle=white, colbacktitle=primary
+]
+CareerPath AI is an intelligent, event-driven career development platform that combines
+large language models, semantic vector search, and automated job matching into a single,
+cohesive product. The system guides users from CV submission to job placement through a
+fully automated AI pipeline.
+\end{tcolorbox}
+
+\vspace{0.5cm}
+
+\section{Key Value Propositions}
+
+\begin{itemize}[leftmargin=*, label=\textcolor{primary}{\faCheckCircle}]
+  \item \textbf{Automated CV Analysis} — Gemini 2.5 Flash scores CVs across five weighted dimensions and identifies skill gaps
+  \item \textbf{Semantic Job Matching} — Qdrant vector similarity search over 3072-dimensional embeddings (gemini-embedding-001)
+  \item \textbf{Personalized Learning Paths} — Dynamic module generation via Udemy/YouTube APIs based on gap analysis
+  \item \textbf{AI Interview Simulation} — Real-time HR and Technical interviews via WebSocket with streaming Gemini responses
+  \item \textbf{Shadow Profiling} — Agent Orchestrator silently builds user competency profiles from natural conversation
+\end{itemize}
+
+\vspace{0.5cm}
+
+\section{Platform Metrics at a Glance}
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \n/\val/\lbl/\col in {
+    0/13/Services/primary,
+    1/4/Databases/secondary,
+    2/5/AI Agents/accent,
+    3/8/Kafka Topics/warning
+  }{
+    \node[
+      fill=\col!10!white, draw=\col, rounded corners=8pt,
+      minimum width=3.8cm, minimum height=2.5cm, inner sep=8pt,
+      xshift=\n*4.2cm
+    ] at (0,0) {%
+      \begin{minipage}{3.2cm}\centering
+        {\color{\col}\fontsize{28}{32}\selectfont\bfseries \val}\\[4pt]
+        {\small\color{textgray} \lbl}
+      \end{minipage}};
+  }
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\chapter{System Architecture}
+% ============================================================
+
+\section{Two-Layer AI Design}
+
+The platform uses a strict two-layer architecture that separates user-facing conversation
+from background processing:
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={rounded corners=6pt, inner sep=10pt, minimum width=4cm, minimum height=1.2cm, font=\small\bfseries},
+  arrow/.style={-Stealth, thick, color=primary}
+]
+  % Layer 1
+  \node[box, fill=primary!15, draw=primary] (orch) at (0,0) {Agent Orchestrator\\\small\color{textgray}Port 8005};
+  \node[above=0.3cm of orch, font=\bfseries\color{primary}] {Layer 1 — Conversational};
+
+  % User
+  \node[box, fill=dark!10, draw=dark, left=2.5cm of orch] (user) {\faUser\quad User\\\small\color{textgray}WebSocket};
+
+  % Kafka
+  \node[box, fill=warning!20, draw=warning, below=1.8cm of orch] (kafka) {\faStream\quad Redpanda\\\small\color{textgray}Kafka-compatible};
+
+  % Layer 2 agents
+  \node[box, fill=secondary!15, draw=secondary, below left=1.5cm and 2cm of kafka] (cva)
+    {CV Analyzer\\\small\color{textgray}Port 8006};
+  \node[box, fill=secondary!15, draw=secondary, below=1.5cm of kafka] (lpa)
+    {Learning Path\\\small\color{textgray}Port 8007};
+  \node[box, fill=secondary!15, draw=secondary, below right=1.5cm and 2cm of kafka] (jma)
+    {Job Match\\\small\color{textgray}Port 8008};
+
+  \node[below=0.2cm of lpa, font=\bfseries\color{secondary}] {Layer 2 — Worker Agents};
+
+  % Arrows
+  \draw[arrow] (user) -- (orch) node[midway,above,font=\tiny] {WS};
+  \draw[arrow] (orch) -- (kafka) node[midway,right,font=\tiny] {publish};
+  \draw[arrow] (kafka) -- (cva);
+  \draw[arrow] (kafka) -- (lpa);
+  \draw[arrow] (kafka) -- (jma);
+  \draw[arrow, dashed] (cva) to[bend left=30] (kafka) node[midway,left,font=\tiny] {result};
+  \draw[arrow, dashed] (lpa) to[bend right=5] (kafka);
+  \draw[arrow, dashed] (jma) to[bend right=30] (kafka);
+\end{tikzpicture}
+\end{center}
+
+\section{Full System Architecture Diagram}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  svc/.style={rounded corners=5pt, minimum width=3.2cm, minimum height=1cm,
+              inner sep=6pt, font=\small\bfseries, align=center},
+  db/.style={cylinder, shape border rotate=90, minimum width=1.8cm, minimum height=1.2cm,
+             inner sep=4pt, font=\footnotesize\bfseries, align=center},
+  arr/.style={-Stealth, thick},
+  kafka/.style={-Stealth, dashed, thick, color=warning!80!black}
+]
+
+% ── Frontend ──
+\node[svc, fill=dark!90, text=white, draw=dark] (fe) at (-6, 4) {
+  \faReact\ Frontend\\{\footnotesize Next.js 14}};
+
+% ── Gateway ──
+\node[svc, fill=nestjs!20, draw=nestjs] (gw) at (0, 4) {
+  \faShieldAlt\ API Gateway\\{\footnotesize NestJS + Fastify}};
+
+% ── Core Services ──
+\node[svc, fill=java!15, draw=java] (us) at (-3, 1.5) {
+  \faJava\ User Service\\{\footnotesize Spring Boot}};
+\node[svc, fill=fastapi!15, draw=fastapi] (cvs) at (3, 1.5) {
+  \faPython\ CV Service\\{\footnotesize FastAPI}};
+\node[svc, fill=fastapi!15, draw=fastapi] (notif) at (7.5, 1.5) {
+  \faBell\ Notification\\{\footnotesize NestJS SSE}};
+
+% ── AI Layer ──
+\node[svc, fill=primary!15, draw=primary] (ao) at (0, -1) {
+  \faBrain\ Agent Orchestrator\\{\footnotesize LangGraph}};
+\node[svc, fill=secondary!15, draw=secondary] (cva) at (-5, -3.5) {
+  \faMicrochip\ CV Analyzer\\{\footnotesize Gemini}};
+\node[svc, fill=secondary!15, draw=secondary] (lpa) at (-1.5, -3.5) {
+  \faRoute\ Learning Path\\{\footnotesize Gemini}};
+\node[svc, fill=secondary!15, draw=secondary] (jma) at (2.5, -3.5) {
+  \faBriefcase\ Job Match\\{\footnotesize Qdrant}};
+\node[svc, fill=secondary!15, draw=secondary] (hr) at (6, -3.5) {
+  \faHeadset\ HR Interview\\{\footnotesize WS}};
+
+% ── Databases ──
+\node[db, fill=blue!10, draw=blue!60] (pg) at (-6, -1) {
+  \faDatabase\\PG};
+\node[db, fill=red!10, draw=red!60] (redis) at (-4.5, -1) {
+  \faMemory\\Redis};
+\node[db, fill=purple!10, draw=purple!60] (qdrant) at (5, -1) {
+  \faVectorSquare\\Qdrant};
+\node[db, fill=orange!10, draw=orange!60] (minio) at (3.5, 1.5) {
+  \faCloud\\MinIO};
+
+% ── Redpanda ──
+\node[svc, fill=warning!20, draw=warning, minimum width=9cm] (rp) at (0.5, -5.8) {
+  \faStream\ Redpanda (Kafka) — Event Bus};
+
+% ── Connections ──
+\draw[arr] (fe) -- (gw);
+\draw[arr] (gw) -- (us);
+\draw[arr] (gw) -- (cvs);
+\draw[arr] (gw) -- (ao);
+\draw[arr] (us) -- (pg);
+\draw[arr] (us) -- (redis);
+\draw[arr] (cvs) -- (minio);
+\draw[arr] (ao) -- (qdrant);
+\draw[arr] (jma) -- (qdrant);
+\draw[kafka] (cvs) -- (rp);
+\draw[kafka] (ao) -- (rp);
+\draw[kafka] (rp) -- (cva);
+\draw[kafka] (rp) -- (lpa);
+\draw[kafka] (rp) -- (jma);
+\draw[kafka] (rp) -- (hr);
+\draw[kafka] (rp) -- (notif);
+
+\end{tikzpicture}
+\caption{Full CareerPath AI System Architecture}
+\end{figure}
+
+% ============================================================
+\chapter{Event-Driven Pipeline}
+% ============================================================
+
+\section{Kafka Topic Flow}
+
+The entire AI pipeline is orchestrated through Redpanda (Kafka-compatible) topics.
+No direct service-to-service HTTP calls exist in the AI layer.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  topic/.style={rounded corners=4pt, fill=warning!20, draw=warning,
+                minimum width=3cm, minimum height=0.8cm, font=\small\ttfamily, inner sep=5pt},
+  agent/.style={rounded corners=5pt, fill=secondary!15, draw=secondary,
+                minimum width=3.2cm, minimum height=1cm, font=\small\bfseries, inner sep=6pt},
+  decision/.style={diamond, fill=primary!15, draw=primary,
+                   minimum width=2cm, minimum height=1.2cm, font=\small\bfseries, inner sep=3pt, aspect=2},
+  arr/.style={-Stealth, thick, color=primary},
+  brr/.style={-Stealth, thick, color=accent}
+]
+
+\node[topic] (t1) at (0,0) {cv.uploaded};
+\node[agent] (cva) at (3.5,0) {CV Analyzer};
+\node[topic] (t2) at (7,0) {cv.analyzed};
+\node[decision] (dec) at (10.5,0) {score?};
+
+% High score path
+\node[topic] (t3h) at (13.5,1.5) {jobs.scraped};
+\node[agent] (jsa) at (13.5,0) {Job Scraper};
+\node[topic] (t4h) at (13.5,-1.5) {jobs.matched};
+\node[agent] (jma) at (16.5,-1.5) {Job Match};
+
+% Low score path
+\node[topic] (t3l) at (10.5,-3) {gaps.identified};
+\node[agent] (lpa) at (7,-3) {Learning Path};
+\node[topic] (t4l) at (3.5,-3) {learning.path.created};
+\node[topic] (t5) at (0,-3) {learning.completed};
+
+% Interview path
+\node[agent] (hr) at (0,-5) {HR Interview};
+\node[agent] (tech) at (3.5,-5) {Tech Interview};
+
+\draw[arr] (t1) -- (cva);
+\draw[arr] (cva) -- (t2);
+\draw[arr] (t2) -- (dec);
+\draw[arr] (dec) -- node[above,font=\tiny]{$\geq$70} (t3h);
+\draw[arr] (t3h) -- (jsa);
+\draw[arr] (jsa) -- (t4h);
+\draw[arr] (t4h) -- (jma);
+\draw[brr] (dec) -- node[right,font=\tiny]{$<$70} (t3l);
+\draw[brr] (t3l) -- (lpa);
+\draw[brr] (lpa) -- (t4l);
+\draw[brr] (t4l) -- (t5);
+\draw[brr] (t5) -- (hr);
+\draw[brr] (hr) -- (tech);
+
+\end{tikzpicture}
+\caption{Complete Event Pipeline — CV Upload to Job Placement / Learning Path}
+\end{figure}
+
+\section{Topic Registry}
+
+\begin{center}
+\rowcolors{2}{primary!5}{white}
+\begin{tabularx}{\textwidth}{llXl}
+\toprule
+\rowcolor{primary!20}
+\textbf{Topic} & \textbf{Producer} & \textbf{Consumer} & \textbf{Trigger} \\
+\midrule
+\texttt{cv.uploaded} & cv-service & cv-analyzer-agent & PDF uploaded to MinIO \\
+\texttt{cv.analyzed} & cv-analyzer-agent & agent-orchestrator & CV scored \\
+\texttt{jobs.scraped} & job-scraper & job-match-agent & Score $\geq$ 70 \\
+\texttt{jobs.matched} & job-match-agent & notification-service & Matches found \\
+\texttt{gaps.identified} & agent-orchestrator & learning-path-agent & Score $<$ 70 \\
+\texttt{learning.path.created} & learning-path-agent & agent-orchestrator & Path ready \\
+\texttt{learning.completed} & agent-orchestrator & hr/tech agents & Modules done \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ============================================================
+\chapter{Technology Stack}
+% ============================================================
+
+\section{Service Inventory}
+
+\begin{center}
+\rowcolors{2}{lightgray}{white}
+\begin{tabularx}{\textwidth}{lllXl}
+\toprule
+\rowcolor{primary!25}
+\textbf{Layer} & \textbf{Service} & \textbf{Port} & \textbf{Stack} & \textbf{Owner} \\
+\midrule
+Frontend & frontend & 3000 & Next.js 14, Tailwind, shadcn/ui, Zustand & Vlad \\
+Gateway & api-gateway & 8000 & NestJS + Fastify, RS256 JWT & Vlad \\
+Core & user-service & 8001 & Java Spring Boot, Keycloak OAuth2, Prisma & Francis \\
+Core & cv-service & 8002 & FastAPI, pdfplumber, MinIO, aiokafka & Francis \\
+Core & job-scraper & 8003 & FastAPI, Playwright, Chromium & Francis \\
+Core & notification-service & 8004 & NestJS, SSE, aiokafka & Francis \\
+AI & agent-orchestrator & 8005 & FastAPI, LangGraph, aiokafka & Rareș \\
+AI & cv-analyzer-agent & 8006 & FastAPI, Gemini 2.5 Flash, Qdrant & Rareș \\
+AI & learning-path-agent & 8007 & FastAPI, Gemini, Udemy/YT APIs & Rareș \\
+AI & job-match-agent & 8008 & FastAPI, Qdrant semantic search & Rareș \\
+AI & hr-interview-agent & 8009 & FastAPI, WebSocket, Gemini streaming & Rareș \\
+AI & tech-interview-agent & 8010 & FastAPI, WebSocket, Gemini streaming & Rareș \\
+\midrule
+Infra & PostgreSQL & 5432 & relational DB & Francis \\
+Infra & Redis & 6379 & sessions, rate-limiting & Francis \\
+Infra & Qdrant & 6333 & vector search, dim=3072 & Rareș \\
+Infra & Redpanda & 9092 & Kafka-compatible event bus & both \\
+Infra & MinIO & 9000 & object storage (CVs bucket) & Francis \\
+Infra & Keycloak & 8080 & OAuth2 / OIDC identity provider & Francis \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Technology Radar}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[
+    width=15cm, height=9cm,
+    xlabel={\textbf{Maturity}},
+    ylabel={\textbf{Strategic Importance}},
+    xmin=0, xmax=10, ymin=0, ymax=10,
+    grid=major, grid style={dashed, gray!30},
+    tick style={draw=none},
+    xtick={2,5,8},
+    xticklabels={Emerging, Established, Mature},
+    ytick={2,5,8},
+    yticklabels={Nice-to-have, Important, Critical},
+    axis background/.style={fill=lightgray!30}
+  ]
+  % Quadrant shading
+  \fill[primary!10] (axis cs:5,5) rectangle (axis cs:10,10);
+
+  % Points
+  \addplot[only marks, mark=*, mark size=5pt, color=primary]
+    coordinates {(8,9.5)} node[above right, font=\small] {Gemini};
+  \addplot[only marks, mark=*, mark size=5pt, color=primary]
+    coordinates {(7,9)} node[above right, font=\small] {Qdrant};
+  \addplot[only marks, mark=*, mark size=4pt, color=secondary]
+    coordinates {(8,8.5)} node[above left, font=\small] {Next.js 14};
+  \addplot[only marks, mark=*, mark size=4pt, color=secondary]
+    coordinates {(9,8)} node[below right, font=\small] {FastAPI};
+  \addplot[only marks, mark=*, mark size=4pt, color=fastapi]
+    coordinates {(8,7.5)} node[below left, font=\small] {NestJS};
+  \addplot[only marks, mark=*, mark size=4pt, color=java]
+    coordinates {(9,7)} node[above right, font=\small] {Spring Boot};
+  \addplot[only marks, mark=*, mark size=3pt, color=warning]
+    coordinates {(7,8)} node[below right, font=\small] {Redpanda};
+  \addplot[only marks, mark=*, mark size=3pt, color=warning]
+    coordinates {(6,6.5)} node[above right, font=\small] {LangGraph};
+  \addplot[only marks, mark=*, mark size=3pt, color=accent]
+    coordinates {(9,6)} node[below right, font=\small] {PostgreSQL};
+  \addplot[only marks, mark=*, mark size=3pt, color=accent]
+    coordinates {(8,5.5)} node[below left, font=\small] {Redis};
+  \addplot[only marks, mark=*, mark size=3pt, color=textgray]
+    coordinates {(5,4.5)} node[above right, font=\small] {Keycloak};
+  \addplot[only marks, mark=*, mark size=3pt, color=textgray]
+    coordinates {(7,4)} node[below right, font=\small] {MinIO};
+  \end{axis}
+\end{tikzpicture}
+\caption{Technology Radar — Maturity vs. Strategic Importance}
+\end{figure}
+
+% ============================================================
+\chapter{AI Engine}
+% ============================================================
+
+\section{CV Scoring Rubric}
+
+The CV Analyzer Agent scores every uploaded CV using a deterministic weighted rubric
+enforced through a plain-text prompt file (\texttt{prompts/cv\_scoring.txt}):
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[
+    xbar, width=13cm, height=7cm,
+    bar width=16pt,
+    xlabel={\textbf{Maximum Points}},
+    symbolic y coords={
+      Certifications,
+      Education,
+      Projects,
+      Tech Stack,
+      Experience
+    },
+    ytick=data,
+    nodes near coords,
+    nodes near coords align=horizontal,
+    xmin=0, xmax=40,
+    grid=x, grid style={dashed, gray!30},
+    axis background/.style={fill=lightgray!20}
+  ]
+  \addplot[fill=primary!80, draw=primary] coordinates {
+    (10, Certifications)
+    (15, Education)
+    (20, Projects)
+    (25, Tech Stack)
+    (30, Experience)
+  };
+  \end{axis}
+\end{tikzpicture}
+\caption{CV Scoring Dimensions (total = 100 points)}
+\end{figure}
+
+\section{Routing Logic Based on Score}
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={rounded corners=6pt, inner sep=10pt, minimum width=5cm, font=\small\bfseries},
+]
+  \node[box, fill=success!15, draw=success] at (-4, 0) {
+    \textcolor{success}{\Large\faArrowUp}\quad Score $\geq$ 70\\[4pt]
+    \small $\rightarrow$ Job Scraper activated\\
+    \small $\rightarrow$ Semantic job matching\\
+    \small $\rightarrow$ Top matches delivered
+  };
+  \node[box, fill=accent!15, draw=accent] at (4, 0) {
+    \textcolor{accent}{\Large\faArrowDown}\quad Score $<$ 70\\[4pt]
+    \small $\rightarrow$ Gap analysis performed\\
+    \small $\rightarrow$ Learning path generated\\
+    \small $\rightarrow$ Interview prep unlocked
+  };
+  \node[fill=warning!20, draw=warning, rounded corners=4pt, inner sep=8pt] at (0,0)
+    {\textbf{cv.analyzed}};
+  \draw[-Stealth, thick, color=success] (-1,0.2) -- (-2.2,0.2);
+  \draw[-Stealth, thick, color=accent] (1,0.2) -- (2.2,0.2);
+\end{tikzpicture}
+\end{center}
+
+\section{Embedding Pipeline}
+
+\begin{tcolorbox}[colback=darkgray!8, colframe=primary!40, arc=5pt]
+\small
+\begin{enumerate}[leftmargin=*]
+  \item PDF text extracted via \textbf{pdfplumber} in cv-service
+  \item Text chunked and embedded with \textbf{gemini-embedding-001} (dim = 3072)
+  \item Vector stored in \textbf{Qdrant} collection \texttt{cv\_embeddings} (Cosine similarity)
+  \item Job descriptions embedded identically into \texttt{job\_embeddings}
+  \item Semantic nearest-neighbor search retrieves top-$k$ job matches
+\end{enumerate}
+\end{tcolorbox}
+
+\section{Qdrant Collections}
+
+\begin{center}
+\rowcolors{2}{purple!5}{white}
+\begin{tabular}{llll}
+\toprule
+\rowcolor{purple!20}
+\textbf{Collection} & \textbf{Dimension} & \textbf{Metric} & \textbf{Owner} \\
+\midrule
+\texttt{cv\_embeddings} & 3072 & Cosine & cv-analyzer-agent \\
+\texttt{job\_embeddings} & 3072 & Cosine & job-match-agent \\
+\texttt{course\_embeddings} & 3072 & Cosine & learning-path-agent \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================
+\chapter{Database Design}
+% ============================================================
+
+\section{Database Ownership Model}
+
+Services access \textbf{only their own tables}. Cross-service data flows exclusively
+through Redpanda events — never through shared database access.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  db/.style={rounded corners=6pt, inner sep=10pt, minimum width=5.5cm, font=\small},
+  table/.style={fill=white, draw=gray!40, rounded corners=3pt, inner sep=5pt,
+                font=\footnotesize\ttfamily, minimum width=4.5cm}
+]
+  % PostgreSQL Francis
+  \node[db, fill=blue!10, draw=blue!50] (pgf) at (-5, 0) {
+    \textbf{\color{blue!70}PostgreSQL — Francis}\\[6pt]
+    \begin{tikzpicture}
+      \node[table] at (0, 0) {users};
+      \node[table] at (0,-0.7) {cv\_uploads};
+      \node[table] at (0,-1.4) {scraped\_jobs};
+      \node[table] at (0,-2.1) {job\_matches};
+    \end{tikzpicture}
+  };
+
+  % PostgreSQL Rares
+  \node[db, fill=purple!10, draw=purple!50] (pgr) at (2, 0) {
+    \textbf{\color{purple!70}PostgreSQL — Rareș}\\[6pt]
+    \begin{tikzpicture}
+      \node[table] at (0, 0) {learning\_paths};
+      \node[table] at (0,-0.7) {quiz\_attempts};
+      \node[table] at (0,-1.4) {interview\_sessions};
+    \end{tikzpicture}
+  };
+
+  % Redis
+  \node[db, fill=red!10, draw=red!50, minimum width=2.8cm] (redis) at (-5,-4.5) {
+    \textbf{\color{red!70}Redis}\\[4pt]
+    \footnotesize JWT sessions\\
+    \footnotesize Rate limiting\\
+    \footnotesize Workflow state (TTL)
+  };
+
+  % Qdrant
+  \node[db, fill=purple!10, draw=purple!50, minimum width=2.8cm] (qd) at (-1,-4.5) {
+    \textbf{\color{purple!70}Qdrant}\\[4pt]
+    \footnotesize cv\_embeddings\\
+    \footnotesize job\_embeddings\\
+    \footnotesize course\_embeddings
+  };
+
+  % MinIO
+  \node[db, fill=orange!10, draw=orange!50, minimum width=2.8cm] (minio) at (3.2,-4.5) {
+    \textbf{\color{orange!70}MinIO}\\[4pt]
+    \footnotesize bucket: cvs-raw\\
+    \footnotesize Raw PDF files
+  };
+
+\end{tikzpicture}
+\caption{Database segregation by service domain}
+\end{figure}
+
+% ============================================================
+\chapter{Security Architecture}
+% ============================================================
+
+\section{Authentication Flow}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  svc/.style={rounded corners=5pt, inner sep=8pt, minimum width=2.8cm,
+              minimum height=0.9cm, font=\small\bfseries, align=center},
+  arr/.style={-Stealth, thick}
+]
+  \node[svc, fill=dark!90, text=white] (user) at (0,0) {\faUser\\ User};
+  \node[svc, fill=nestjs!20, draw=nestjs] (gw) at (4,0) {\faShieldAlt\\ API Gateway};
+  \node[svc, fill=orange!20, draw=orange!60] (kc) at (8,0) {\faKey\\ Keycloak};
+  \node[svc, fill=blue!15, draw=blue!50] (ds) at (6,-2.5) {\faServer\\ Downstream\\Service};
+
+  \draw[arr] (user) -- node[above,font=\tiny]{credentials} (gw);
+  \draw[arr] (gw) -- node[above,font=\tiny]{validate token} (kc);
+  \draw[arr, dashed] (kc) -- node[right,font=\tiny]{JWKS} (gw);
+  \draw[arr] (gw) -- node[right,font=\tiny]{x-user-id header} (ds);
+  \draw[arr, dashed] (gw) to[bend right=20] node[left,font=\tiny]{RS256 JWT} (user);
+\end{tikzpicture}
+\end{figure}
+
+\section{Security Controls}
+
+\begin{center}
+\rowcolors{2}{lightgray}{white}
+\begin{tabularx}{\textwidth}{lXl}
+\toprule
+\rowcolor{primary!20}
+\textbf{Control} & \textbf{Implementation} & \textbf{Status} \\
+\midrule
+Authentication & RS256 JWT via Keycloak & \badge{success}{\faCheck\ Active} \\
+Authorization & API Gateway injects \texttt{x-user-id}; downstream trusts & \badge{success}{\faCheck\ Active} \\
+Transport & HTTPS in production (docker-compose.prod.yml) & \badge{warning}{\faExclamation\ Prod-only} \\
+Secrets & \texttt{.env} excluded from git; \texttt{.env.example} committed & \badge{success}{\faCheck\ Active} \\
+CORS & \texttt{app.enableCors(\{origin: localhost:3000\})} & \badge{success}{\faCheck\ Active} \\
+Rate Limiting & Redis-backed in API Gateway & \badge{warning}{\faExclamation\ Planned} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ============================================================
+\chapter{Team \& Responsibilities}
+% ============================================================
+
+\section{Ownership Matrix}
+
+\begin{center}
+\begin{tikzpicture}
+  % Rares card
+  \node[
+    rounded corners=8pt, fill=primary!12, draw=primary,
+    minimum width=4.5cm, minimum height=6.5cm, inner sep=15pt
+  ] at (-5.5, 0) {
+    \begin{minipage}{4cm}
+      \centering
+      \begin{tikzpicture}
+        \node[circle, fill=primary, minimum size=1.5cm, text=white, font=\Large\bfseries] {R};
+      \end{tikzpicture}\\[8pt]
+      {\large\bfseries Rareș}\\[4pt]
+      \textcolor{primary}{Lead AI Engineer}\\[10pt]
+      \raggedright\small
+      \faCheckCircle\ agent-orchestrator\\[3pt]
+      \faCheckCircle\ cv-analyzer-agent\\[3pt]
+      \faCheckCircle\ learning-path-agent\\[3pt]
+      \faCheckCircle\ job-match-agent\\[3pt]
+      \faCheckCircle\ hr/tech-interview\\[3pt]
+      \faCheckCircle\ Qdrant collections\\[3pt]
+      \faCheckCircle\ Gemini prompts\\[3pt]
+      \faCheckCircle\ RAG pipeline
+    \end{minipage}
+  };
+
+  % Francis card
+  \node[
+    rounded corners=8pt, fill=fastapi!12, draw=fastapi,
+    minimum width=4.5cm, minimum height=6.5cm, inner sep=15pt
+  ] at (0, 0) {
+    \begin{minipage}{4cm}
+      \centering
+      \begin{tikzpicture}
+        \node[circle, fill=fastapi, minimum size=1.5cm, text=white, font=\Large\bfseries] {F};
+      \end{tikzpicture}\\[8pt]
+      {\large\bfseries Francis}\\[4pt]
+      \textcolor{fastapi}{Lead Backend Engineer}\\[10pt]
+      \raggedright\small
+      \faCheckCircle\ user-service\\[3pt]
+      \faCheckCircle\ cv-service\\[3pt]
+      \faCheckCircle\ job-scraper-service\\[3pt]
+      \faCheckCircle\ notification-service\\[3pt]
+      \faCheckCircle\ PostgreSQL schema\\[3pt]
+      \faCheckCircle\ Redis / MinIO\\[3pt]
+      \faCheckCircle\ Keycloak / OAuth2\\[3pt]
+      \faCheckCircle\ Docker infra
+    \end{minipage}
+  };
+
+  % Vlad card
+  \node[
+    rounded corners=8pt, fill=secondary!12, draw=secondary,
+    minimum width=4.5cm, minimum height=6.5cm, inner sep=15pt
+  ] at (5.5, 0) {
+    \begin{minipage}{4cm}
+      \centering
+      \begin{tikzpicture}
+        \node[circle, fill=secondary, minimum size=1.5cm, text=white, font=\Large\bfseries] {V};
+      \end{tikzpicture}\\[8pt]
+      {\large\bfseries Vlad}\\[4pt]
+      \textcolor{secondary!60!black}{Lead Frontend Engineer}\\[10pt]
+      \raggedright\small
+      \faCheckCircle\ Next.js frontend\\[3pt]
+      \faCheckCircle\ shadcn/ui components\\[3pt]
+      \faCheckCircle\ Zustand state mgmt\\[3pt]
+      \faCheckCircle\ api-gateway (NestJS)\\[3pt]
+      \faCheckCircle\ Login / Register\\[3pt]
+      \faCheckCircle\ Dashboard UI\\[3pt]
+      \faCheckCircle\ WebSocket client\\[3pt]
+      \faCheckCircle\ UX / design system
+    \end{minipage}
+  };
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\chapter{Development \& Operations}
+% ============================================================
+
+\section{Docker Compose Profiles}
+
+\begin{center}
+\rowcolors{2}{lightgray}{white}
+\begin{tabular}{llp{7cm}}
+\toprule
+\rowcolor{primary!20}
+\textbf{Profile} & \textbf{Target} & \textbf{Services Started} \\
+\midrule
+\texttt{agents} & Rareș & infra + orchestrator + all AI agents \\
+\texttt{backend} & Francis & infra + user-service + cv-service + job-scraper + notifications \\
+\texttt{frontend} & Vlad & infra + api-gateway + user-service + frontend \\
+\texttt{observability} & All & Grafana LGTM stack only \\
+\textit{(none)} & DevOps & All infrastructure containers (no profile tag) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Development Workflow}
+
+\begin{tcolorbox}[colback=dark!5, colframe=dark!30, arc=5pt,
+  title={\faTerminal\quad Common Commands}, fonttitle=\bfseries]
+\begin{lstlisting}[language=bash, numbers=none, frame=none, backgroundcolor=\color{white}]
+# First-time setup
+cp .env.example .env   # fill API keys
+make keys              # generate RS256 key pair
+make up                # start everything
+
+# Profile-based (recommended for dev)
+docker-compose --profile frontend up
+docker-compose --profile agents up
+
+# Logs
+make logs              # all containers
+make logs-cv           # cv-service + cv-analyzer-agent
+make logs-agents       # orchestrator + all agents
+
+# Database
+make migrate           # prisma migrate dev
+make db-studio         # open Prisma Studio
+\end{lstlisting}
+\end{tcolorbox}
+
+\section{Hot Reload Configuration}
+
+\begin{center}
+\rowcolors{2}{lightgray}{white}
+\begin{tabular}{lll}
+\toprule
+\rowcolor{primary!20}
+\textbf{Service} & \textbf{Mechanism} & \textbf{Reload Trigger} \\
+\midrule
+frontend & \texttt{next dev + WATCHPACK\_POLLING=true} & Any \texttt{.tsx/.ts} change \\
+api-gateway & \texttt{nest start --watch} & Any \texttt{.ts} change \\
+cv-analyzer-agent & \texttt{uvicorn --reload} & Any \texttt{.py} change \\
+all FastAPI agents & \texttt{uvicorn --reload} & Any \texttt{.py} change \\
+user-service & Maven rebuild required & Manual \texttt{docker compose up --build} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================
+\chapter{Roadmap}
+% ============================================================
+
+\section{Development Phases}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  phase/.style={rounded corners=6pt, inner sep=12pt, minimum width=3.8cm, font=\small},
+  tick/.style={circle, fill=primary, minimum size=0.5cm, inner sep=0},
+  done/.style={tick, fill=success},
+  wip/.style={tick, fill=warning},
+  todo/.style={tick, fill=gray!40}
+]
+  % Timeline
+  \draw[thick, color=primary!40, line width=2pt] (0,0) -- (15,0);
+
+  % Phase 1
+  \node[done] (p1) at (1.5,0) {};
+  \node[phase, fill=success!12, draw=success, above=0.5cm of p1] {
+    \textbf{Phase 1} — Foundation\\[4pt]
+    \footnotesize Docker infra\\
+    API Gateway\\
+    User Service\\
+    Frontend skeleton
+  };
+  \node[below=0.3cm of p1, font=\tiny\color{textgray}] {Q1 2026};
+
+  % Phase 2
+  \node[done] (p2) at (5.5,0) {};
+  \node[phase, fill=success!12, draw=success, below=0.5cm of p2, yshift=-0.5cm] {
+    \textbf{Phase 2} — AI Core\\[4pt]
+    \footnotesize CV Analyzer\\
+    Embeddings + Qdrant\\
+    CV scoring rubric\\
+    Gap analysis
+  };
+  \node[above=0.3cm of p2, font=\tiny\color{textgray}] {Q1--Q2 2026};
+
+  % Phase 3
+  \node[wip] (p3) at (9,0) {};
+  \node[phase, fill=warning!12, draw=warning, above=0.5cm of p3] {
+    \textbf{Phase 3} — Matching\\[4pt]
+    \footnotesize Job Scraper\\
+    Job Match Agent\\
+    Learning Path\\
+    Notification SSE
+  };
+  \node[below=0.3cm of p3, font=\tiny\color{textgray}] {Q2 2026};
+
+  % Phase 4
+  \node[todo] (p4) at (13,0) {};
+  \node[phase, fill=gray!10, draw=gray!40, below=0.5cm of p4, yshift=-0.5cm] {
+    \textbf{Phase 4} — Interviews\\[4pt]
+    \footnotesize HR Interview Agent\\
+    Tech Interview Agent\\
+    WebSocket streaming\\
+    Production deploy
+  };
+  \node[above=0.3cm of p4, font=\tiny\color{textgray}] {Q3 2026};
+
+  % Legend
+  \node[done, label=right:{\small Completed}] at (0,-2.5) {};
+  \node[wip, label=right:{\small In Progress}] at (3,-2.5) {};
+  \node[todo, label=right:{\small Planned}] at (6,-2.5) {};
+\end{tikzpicture}
+\caption{CareerPath AI Development Roadmap}
+\end{figure}
+
+\section{Current Status — Sprint Overview}
+
+\begin{center}
+\begin{tikzpicture}
+  \begin{axis}[
+    xbar stacked,
+    width=14cm, height=7cm,
+    bar width=18pt,
+    xlabel={\textbf{Completion \%}},
+    symbolic y coords={
+      Infra \& DevOps,
+      Frontend,
+      API Gateway,
+      User Service,
+      CV Service,
+      CV Analyzer Agent,
+      Job Scraper,
+      Notification,
+      Orchestrator,
+      Interview Agents
+    },
+    ytick=data,
+    xmin=0, xmax=100,
+    legend style={at={(0.5,-0.15)}, anchor=north, legend columns=3},
+    grid=x, grid style={dashed, gray!30},
+    axis background/.style={fill=lightgray!20}
+  ]
+  \addplot[fill=success!70, draw=none] coordinates {
+    (90,Infra \& DevOps)(75,Frontend)(80,API Gateway)
+    (70,User Service)(65,CV Service)(70,CV Analyzer Agent)
+    (20,Job Scraper)(30,Notification)(40,Orchestrator)(10,Interview Agents)
+  };
+  \addplot[fill=warning!60, draw=none] coordinates {
+    (10,Infra \& DevOps)(20,Frontend)(15,API Gateway)
+    (20,User Service)(25,CV Service)(20,CV Analyzer Agent)
+    (30,Job Scraper)(20,Notification)(30,Orchestrator)(20,Interview Agents)
+  };
+  \addplot[fill=gray!30, draw=none] coordinates {
+    (0,Infra \& DevOps)(5,Frontend)(5,API Gateway)
+    (10,User Service)(10,CV Service)(10,CV Analyzer Agent)
+    (50,Job Scraper)(50,Notification)(30,Orchestrator)(70,Interview Agents)
+  };
+  \legend{Done, In Progress, Planned}
+  \end{axis}
+\end{tikzpicture}
+\caption{Per-service completion estimate (April 2026)}
+\end{figure}
+
+% ============================================================
+\chapter{API Reference}
+% ============================================================
+
+\section{API Gateway — Public Endpoints}
+
+\begin{tcolorbox}[colback=lightgray!30, colframe=primary!30, arc=5pt]
+\textbf{Base URL:} \texttt{http://localhost:8000} (dev) \quad
+\textbf{Auth:} Bearer RS256 JWT (except login/register)
+\end{tcolorbox}
+
+\vspace{0.4cm}
+
+\begin{center}
+\rowcolors{2}{lightgray}{white}
+\begin{tabularx}{\textwidth}{llXl}
+\toprule
+\rowcolor{primary!20}
+\textbf{Method} & \textbf{Path} & \textbf{Description} & \textbf{Auth?} \\
+\midrule
+\badge{success}{POST} & \texttt{/api/auth/register} & Create new user account & No \\
+\badge{success}{POST} & \texttt{/api/auth/login} & Authenticate, get JWT & No \\
+\badge{secondary!60!black}{GET} & \texttt{/api/auth/me} & Get current user profile & Yes \\
+\badge{secondary!60!black}{GET} & \texttt{/api/users/*} & User profile operations & Yes \\
+\badge{secondary!60!black}{GET} & \texttt{/health} & Gateway health check & No \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{CV Analyzer Agent — Internal Endpoints}
+
+\begin{center}
+\rowcolors{2}{lightgray}{white}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\rowcolor{secondary!20}
+\textbf{Method} & \textbf{Path} & \textbf{Description} \\
+\midrule
+\badge{secondary!60!black}{GET} & \texttt{/health} & Agent health + Kafka status \\
+Kafka Consumer & \texttt{cv.uploaded} topic & Triggers CV analysis pipeline \\
+Kafka Producer & \texttt{cv.analyzed} topic & Publishes score + gap analysis \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ============================================================
+\chapter{Glossary}
+% ============================================================
+
+\begin{description}[leftmargin=3cm, style=nextline]
+  \item[RAG] Retrieval-Augmented Generation — combining vector search with LLM generation
+  \item[Qdrant] Open-source vector database used for semantic similarity search
+  \item[Redpanda] Kafka-compatible event streaming platform with lower operational overhead
+  \item[LangGraph] Framework for building stateful, multi-agent AI workflows
+  \item[Gemini] Google's multimodal large language model family (using 2.5 Flash)
+  \item[gemini-embedding-001] Google's text embedding model producing 3072-dimensional vectors
+  \item[RS256] RSA-based JWT signing algorithm using asymmetric key pairs
+  \item[Keycloak] Open-source Identity and Access Management solution with OAuth2/OIDC
+  \item[Shadow Profiling] Silent user profiling extracted from natural conversation by the orchestrator
+  \item[aiokafka] Async Python Kafka client used by all FastAPI agents
+  \item[MinIO] S3-compatible object storage used for raw CV PDF files
+  \item[SSE] Server-Sent Events — used by notification-service for real-time push notifications
+\end{description}
+
+% ── Back Cover ───────────────────────────────────────────────
+\clearpage
+\pagecolor{dark}
+\color{white}
+\thispagestyle{empty}
+\begin{center}
+\vspace*{8cm}
+\begin{tikzpicture}
+  \node[circle, fill=primary, minimum size=2.5cm,
+        inner sep=0, drop shadow={opacity=0.4}]
+    (logo) {};
+  \node[at=(logo), font=\fontsize{32}{32}\selectfont] {\faRocket};
+\end{tikzpicture}
+
+\vspace{1cm}
+{\Large\bfseries CareerPath AI}\\[0.5cm]
+{\color{textgray} Intelligent Career Development Platform}\\[1.5cm]
+\textcolor{primary}{\rule{6cm}{1pt}}\\[1cm]
+{\small\color{white!60!gray}
+  \textbf{Rareș} $\cdot$ AI Agents \quad
+  \textbf{Francis} $\cdot$ Backend \quad
+  \textbf{Vlad} $\cdot$ Frontend\\[0.5cm]
+  \textit{Confidential — Internal Use Only} $\cdot$ April 2026
+}
+\end{center}
+
+\end{document}
