@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 aiokafka
 langgraph
 redis
@@ -7,3 +8,4 @@ python-dotenv
 pydantic
 httpx
 prometheus-fastapi-instrumentator
+google-genai
