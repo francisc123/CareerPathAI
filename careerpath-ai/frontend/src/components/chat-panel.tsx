@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Sparkles, Search, MessageCircleQuestion, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Send, Sparkles, Search, MessageCircleQuestion, Loader2, FileUp, ArrowRight } from "lucide-react";
 
 const ORCHESTRATOR_WS_URL = process.env.NEXT_PUBLIC_ORCHESTRATOR_WS_URL || "ws://localhost:8005";
 
@@ -40,6 +41,7 @@ export function ChatPanel() {
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const [wsStatus, setWsStatus] = useState<WsStatus>("connecting");
+  const [showCta, setShowCta] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -67,6 +69,9 @@ export function ChatPanel() {
         } else if (payload.type === "message") {
           setIsTyping(false);
           setMessages((prev) => [...prev, { from: "ai", text: payload.text }]);
+        } else if (payload.type === "cta") {
+          setIsTyping(false);
+          setShowCta(true);
         }
       } catch {
         setIsTyping(false);
@@ -154,6 +159,25 @@ export function ChatPanel() {
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
             </div>
+          </div>
+        )}
+
+        {/* CV upload CTA — shown after interview completes */}
+        {showCta && (
+          <div className="flex justify-start animate-in fade-in slide-in-from-bottom-4 duration-700 pt-2">
+            <Link
+              href="/upload"
+              className="group flex items-center gap-4 px-6 py-4 rounded-[20px] bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-900/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] max-w-sm w-full"
+            >
+              <div className="p-2 rounded-xl bg-white/15">
+                <FileUp size={20} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold">Upload your CV</p>
+                <p className="text-[11px] text-indigo-200 mt-0.5">Get your personalized career analysis</p>
+              </div>
+              <ArrowRight size={16} className="opacity-60 group-hover:translate-x-1 transition-transform" />
+            </Link>
           </div>
         )}
 

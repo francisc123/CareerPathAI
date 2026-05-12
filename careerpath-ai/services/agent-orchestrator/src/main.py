@@ -72,7 +72,9 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
     try:
         await websocket.send_json({"type": "typing"})
         greeting = await chat(user_id, "__init__")
-        await websocket.send_json({"type": "message", "text": greeting})
+        await websocket.send_json({"type": "message", "text": greeting["text"]})
+        if greeting.get("cta"):
+            await websocket.send_json({"type": "cta"})
     except Exception as e:
         logger.error(f"Greeting failed for {user_id}: {e}")
         await websocket.send_json({
@@ -92,8 +94,10 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
             # Signal typing
             await websocket.send_json({"type": "typing"})
 
-            ai_response = await chat(user_id, user_message)
-            await websocket.send_json({"type": "message", "text": ai_response})
+            result = await chat(user_id, user_message)
+            await websocket.send_json({"type": "message", "text": result["text"]})
+            if result.get("cta"):
+                await websocket.send_json({"type": "cta"})
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: user={user_id}")

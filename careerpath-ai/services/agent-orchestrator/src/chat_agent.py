@@ -7,36 +7,63 @@ from .config import GEMINI_API_KEY, REDIS_URL
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are CareerPath AI, an intelligent and empathetic career advisor embedded in a career development platform.
+# ---------------------------------------------------------------------------
+# System prompt — structured 5-question career interview
+# ---------------------------------------------------------------------------
+SYSTEM_PROMPT = """You are a Senior IT Career Advisor on the CareerPath AI platform.
+You are professional, analytical, and direct. Your pace is fast and decision-oriented. No small talk — you run an efficient triage.
 
-Your goals:
-1. Help users clarify their career goals through natural, friendly conversation.
-2. Silently build their professional profile from what they share (shadow profiling).
-3. Ask smart follow-up questions about: target role, years of experience, tech stack, seniority level.
-4. When you have a good picture of who they are, suggest uploading their CV for deeper analysis and personalized job matches.
-5. Keep responses SHORT — 1-3 sentences maximum. Be conversational, not robotic.
+STRICT RULES (follow without exception):
 
-Rules:
-- Never ask more than one question at a time.
-- Sound like a knowledgeable human advisor, not a form.
-- If the user greets you, greet back and ask ONE question about their career.
-- Always respond in the SAME LANGUAGE the user writes in.
-- If the user seems interested in jobs or learning paths, gently guide them to upload their CV.
+1. LENGTH: Every response is MAXIMUM 2-3 short sentences.
+
+2. ONE question per message only.
+
+3. CRITICAL MECHANISM — NEVER ask open-ended questions. Frame EVERY question with 2 or 3 clear contrasting options.
+   Correct examples:
+   - "Do you prefer working with numbers and logic, or are you more of a visual and creative person?"
+   - "Do you enjoy finding bugs and testing things, or do you prefer building them from scratch?"
+   - "Do you like explaining and documenting, or do you prefer staying in the code?"
+   Adapt the options to what the user just told you.
+
+4. LIMIT: You have a budget of MAXIMUM 10 questions for the entire session. If the profile is clear after 4-5, go straight to the conclusion.
+
+5. CONCLUSION: When you have enough data, write:
+   - The recommended role (e.g. Frontend Developer, QA Engineer, Data Analyst)
+   - 2 concrete steps to get started
+   - On the very next line, write exactly: CTA_READY
+   Do not write anything after CTA_READY.
+
+CORRECT ending example:
+  Your profile fits best with a **QA Engineer** role.
+  Step 1: Start with manual testing fundamentals (ISTQB Foundation level).
+  Step 2: Upload your CV for a detailed skills gap analysis.
+  CTA_READY
+
+LANGUAGE RULE: Always respond in the same language the user writes in. If the user writes in Romanian, respond in Romanian. If in English, respond in English.
+
+SPECIAL CASE — if the user's first message is "__init__":
+  Reply with EXACTLY the following text, no extra words, no modifications:
+  "Bun venit! Sunt aici să te ajut să-ți conturezi parcursul profesional. Pentru început, aș vrea să știu dacă lucrezi deja în domeniul tech, ești student sau te gândești să faci o reconversie?"
 """
 
-PROFILE_EXTRACTION_PROMPT = """Extract career information from this conversation. Return ONLY valid JSON, no markdown.
+# ---------------------------------------------------------------------------
+# Profile extraction prompt (shadow profiling)
+# ---------------------------------------------------------------------------
+PROFILE_EXTRACTION_PROMPT = """Extrage datele de profil de carieră din această conversație. Returnează DOAR JSON valid, fără markdown.
 
-Conversation:
+Conversație:
 {conversation}
 
-JSON schema (use null if not mentioned):
+Schema JSON (null dacă nu a fost menționat):
 {{
   "target_role": "string or null",
   "experience_years": "number or null",
-  "skills": ["list of technical skills"],
+  "skills": ["lista de competențe tehnice"],
   "seniority": "junior | mid | senior | null",
-  "location": "string or null",
-  "ready_for_cv_upload": true or false
+  "current_situation": "in_tech | student | career_switch | null",
+  "actively_job_hunting": "boolean or null",
+  "location": "string or null"
 }}"""
 
 
@@ -49,36 +76,44 @@ async def _save_history(redis_client, user_id: str, history: list[dict]):
     await redis_client.set(f"chat:{user_id}", json.dumps(history), ex=86400)
 
 
-async def _extract_profile(redis_client, user_id: str, history: list[dict]):
-    """Background shadow profiling — extracts structured data from conversation."""
+async def _extract_and_save_profile(redis_client, user_id: str, history: list[dict]):
+    """Silently extract structured profile from conversation and persist to Redis."""
     conversation_text = "\n".join(
         f"{'User' if m['role'] == 'user' else 'AI'}: {m['content']}"
         for m in history
     )
     prompt = PROFILE_EXTRACTION_PROMPT.format(conversation=conversation_text)
-
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         resp = await client.aio.models.generate_content(
             model="gemini-2.5-flash",
             contents=prompt,
         )
-        text = resp.text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        text = (
+            resp.text.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
         profile = json.loads(text)
         await redis_client.set(f"profile:{user_id}", json.dumps(profile), ex=86400 * 7)
-        logger.info(f"Shadow profile updated for {user_id}: {profile}")
+        logger.info(f"Profile updated for {user_id}: {profile}")
     except Exception as e:
         logger.warning(f"Profile extraction skipped for {user_id}: {e}")
 
 
-async def chat(user_id: str, user_message: str) -> str:
-    """Process a user message through Gemini and return the AI response."""
+async def chat(user_id: str, user_message: str) -> dict:
+    """
+    Process one user turn.
+    Returns {"text": str, "cta": bool}
+    cta=True means the interview is complete → frontend should show upload card.
+    """
     redis_client = redis_lib.from_url(REDIS_URL, decode_responses=True)
     try:
         history = await _get_history(redis_client, user_id)
         history.append({"role": "user", "content": user_message})
 
-        # Build Gemini content list
         contents = [
             types.Content(
                 role="user" if m["role"] == "user" else "model",
@@ -93,21 +128,27 @@ async def chat(user_id: str, user_message: str) -> str:
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                temperature=0.75,
-                max_output_tokens=250,
+                temperature=0.65,
+                max_output_tokens=512,
             ),
         )
 
-        ai_text = response.text.strip()
-        history.append({"role": "model", "content": ai_text})
+        raw = response.text.strip()
+
+        # Detect CTA_READY signal
+        cta = "CTA_READY" in raw
+        # Strip the marker — show only the summary sentence
+        text = raw.replace("CTA_READY", "").strip()
+
+        history.append({"role": "model", "content": raw})
         await _save_history(redis_client, user_id, history)
 
-        # Run shadow profiling every 3 user messages
-        user_msg_count = sum(1 for m in history if m["role"] == "user")
-        if user_msg_count % 3 == 0:
-            await _extract_profile(redis_client, user_id, history)
+        # Shadow profile extraction after every 2 user messages
+        user_count = sum(1 for m in history if m["role"] == "user")
+        if user_count % 2 == 0 or cta:
+            await _extract_and_save_profile(redis_client, user_id, history)
 
-        return ai_text
+        return {"text": text, "cta": cta}
 
     finally:
         await redis_client.aclose()
