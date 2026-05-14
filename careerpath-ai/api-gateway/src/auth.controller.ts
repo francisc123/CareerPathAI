@@ -4,6 +4,8 @@ import * as jwt from 'jsonwebtoken';
 import * as fs from 'fs';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
+import { Public } from './auth/public.decorator';
+
 interface LoginDto { email: string; password: string; }
 interface RegisterDto { name: string; email: string; password: string; }
 
@@ -12,7 +14,7 @@ export class AuthController {
     private readonly privateKey: string;
 
     constructor() {
-        const keyPath = process.env.JWT_PRIVATE_KEY_PATH || '/app/keys/private.pem';
+        const keyPath = process.env.JWT_PRIVATE_KEY_PATH || './keys/private.pem';
         this.privateKey = fs.existsSync(keyPath) ? fs.readFileSync(keyPath, 'utf8') : '';
     }
 
@@ -21,6 +23,7 @@ export class AuthController {
         return jwt.sign(payload, this.privateKey, { algorithm: 'RS256', expiresIn: '15m' });
     }
 
+    @Public()
     @Post('login')
     login(@Body() body: LoginDto) {
         if (!body.email || !body.password) throw new BadRequestException('Email și parola sunt obligatorii');
@@ -29,6 +32,7 @@ export class AuthController {
         return { user, token: this.sign({ sub: userId, email: body.email, name: user.name }) };
     }
 
+    @Public()
     @Post('register')
     register(@Body() body: RegisterDto) {
         if (!body.email || !body.password || !body.name) throw new BadRequestException('Toate câmpurile sunt obligatorii');
@@ -38,7 +42,6 @@ export class AuthController {
     }
 
     @Get('me')
-    @UseGuards(JwtAuthGuard)
     getMe(@Req() req: Request) {
         return (req as any).user;
     }
