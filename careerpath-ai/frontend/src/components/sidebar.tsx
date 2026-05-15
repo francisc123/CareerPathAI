@@ -24,9 +24,15 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="w-64 h-full bg-white/[0.02] border-r border-white/5 flex flex-col p-6 relative z-20 overflow-hidden">
+    <aside className={cn(
+      "relative h-full z-40", 
+      "w-[72px] hover:w-64", // Latime redusa pentru compactitate
+      "bg-transparent", // Eliminam orice culoare diferita
+      "flex flex-col py-4 transition-all duration-500 ease-[cubic-bezier(0.2,1,0.3,1)] group/sidebar", 
+      "overflow-hidden"
+    )}>
       
-      <nav className="flex-1 space-y-2 pt-4">
+      <nav className="flex flex-col w-full">
         {menuItems.map((item) => {
           const isActive = item.href === "/dashboard" 
             ? pathname === "/dashboard" 
@@ -37,33 +43,37 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "group flex items-center gap-4 px-4 py-3 rounded-2xl transition-colors duration-200 border border-transparent relative focus:outline-none focus:ring-0 focus:border-transparent",
-                isActive 
-                  ? "bg-white/10 text-white border-white/10" 
-                  : "text-slate-500 hover:text-slate-200 hover:bg-white/5"
+                "group flex items-center h-[56px] w-full transition-all duration-300 relative",
+                "hover:bg-white/[0.03]"
               )}
             >
-              <item.icon 
-                size={18} 
-                className={cn(
-                  "transition-colors duration-200",
-                  isActive ? "text-indigo-400" : "group-hover:text-white"
-                )} 
-              />
+              {/* CONTAINER ICON - Centrare Matematica */}
+              <div className="w-[72px] min-w-[72px] flex items-center justify-center relative z-10">
+                <div className={cn(
+                  "p-2.5 rounded-xl transition-all duration-300",
+                  isActive ? "bg-indigo-500/20 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]" : "text-slate-500 group-hover:text-slate-200"
+                )}>
+                  <item.icon size={20} />
+                </div>
+              </div>
+
+              {/* LABEL - Glisare lina */}
               <span className={cn(
-                "text-xs font-bold tracking-wide uppercase transition-all",
-                isActive ? "opacity-100" : "opacity-70 group-hover:opacity-100"
+                "text-[10px] font-black tracking-[0.2em] uppercase transition-all duration-500 whitespace-nowrap",
+                "opacity-0 -translate-x-4 group-hover/sidebar:opacity-100 group-hover/sidebar:translate-x-0",
+                isActive ? "text-white" : "text-slate-400"
               )}>
                 {item.label}
               </span>
               
+              {/* Indicator activ discret in dreapta (doar la hover) */}
               {isActive && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-sm shadow-indigo-500/20" />
+                <div className="absolute left-0 w-[2px] h-6 bg-indigo-500 shadow-[0_0_10px_#6366f1]" />
               )}
             </Link>
           );
         })}
       </nav>
-    </div>
+    </aside>
   );
 }
