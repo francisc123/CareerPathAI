@@ -19,7 +19,8 @@ import {
   Zap,
   ArrowRight,
   Lock,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CVScoreGauge } from "@/components/ui/cv-score-gauge";
@@ -60,7 +61,6 @@ interface FinalResults {
 
 export default function TechnicalInterviewPage() {
   // --- MOCK GLOBAL STATE ---
-  // Setat pe false pentru a arăta starea blocată la început
   const [hasPassedQuiz, setHasPassedQuiz] = useState(false); 
 
   // --- STATE ---
@@ -260,50 +260,38 @@ export default function TechnicalInterviewPage() {
   // ==========================================
   if (!hasPassedQuiz) {
     return (
-      <div className="w-full h-[calc(100vh-210px)] flex flex-col items-center justify-center animate-in zoom-in-95 duration-500">
-        <div className="max-w-md w-full bg-[#0b0f1a]/80 border border-white/5 rounded-[40px] p-10 flex flex-col items-center text-center shadow-2xl backdrop-blur-xl relative overflow-hidden">
-          
-          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-[50px] pointer-events-none" />
-          
-          <div className="w-20 h-20 rounded-[24px] bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20 mb-8 shadow-inner">
-            <Lock size={32} />
+      <div className="w-full h-[calc(100vh-170px)] flex flex-col items-center justify-center p-1 animate-in zoom-in-95 duration-500">
+        <div className="max-w-md w-full bg-[#0b0f1a]/80 border border-white/5 rounded-[28px] p-10 flex flex-col items-center text-center shadow-2xl backdrop-blur-xl relative overflow-hidden">
+          <div className="w-16 h-16 rounded-[20px] bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20 mb-6 shadow-inner">
+            <Lock size={24} />
           </div>
-          
-          <h2 className="text-2xl font-black uppercase tracking-tight text-white leading-none mb-3">Interview Locked</h2>
-          <p className="text-sm font-medium text-slate-400 leading-relaxed mb-8">
-            You need to achieve an <strong className="text-indigo-400">80% passing score</strong> in your core learning modules before unlocking the AI Simulation.
-          </p>
-
-          <Link 
-            href="/learning/path" 
-            className="w-full py-4 rounded-[16px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 bg-white text-black hover:bg-indigo-500 hover:text-white shadow-xl active:scale-95"
-          >
-            <BookOpen size={16} /> Resume Learning Path
+          <h2 className="text-xl font-black uppercase tracking-tight text-white mb-2">Interview Locked</h2>
+          <p className="text-xs font-medium text-slate-400 mb-6">You need to achieve an 80% passing score in core path components first.</p>
+          <Link href="/learning/path" className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+            <BookOpen size={12} /> Open Curriculum
           </Link>
-
-          {/* HIDDEN DEV BUTTON */}
-          <button 
-            onClick={() => setHasPassedQuiz(true)} 
-            className="mt-6 text-[9px] font-black text-slate-600 uppercase tracking-widest hover:text-white transition-colors"
-          >
-            [Dev: Click to Unlock]
-          </button>
-
+          <button onClick={() => setHasPassedQuiz(true)} className="mt-4 text-[8px] font-black text-slate-600 uppercase tracking-widest hover:text-white transition-colors">[Dev Unlock]</button>
         </div>
       </div>
     );
   }
 
-  // --- INTERVIEW COMPLETED VIEW ---
+  // ==========================================
+  // RENDER 2: INTERVIEW COMPLETED VIEW
+  // ==========================================
   if (interviewState === "completed" && results) {
     return (
-      <div className="w-full max-w-[1000px] mx-auto space-y-6 animate-in zoom-in-95 duration-700 pb-10">
-        <div className="text-center space-y-3 mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <Award size={28} />
+      <div className="w-full max-w-[1200px] mx-auto space-y-6 animate-in zoom-in-95 duration-700 pb-10 p-1">
+        
+        {/* CHENAR DESIGN UNIFICAT ABSOLUT COMPATIBIL CROMATIC */}
+        <div className="flex items-center gap-4 bg-[#0b0f1a]/60 border border-white/5 rounded-[24px] px-6 py-4 backdrop-blur-xl shrink-0 shadow-lg">
+          <div className="w-10 h-10 rounded-[14px] bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
+            <Award size={20} />
           </div>
-          <h1 className="text-3xl font-black tracking-tighter text-white uppercase">Technical Assessment Complete</h1>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Your code and system design skills have been evaluated.</p>
+          <div>
+            <h1 className="text-lg font-black tracking-tight text-white uppercase leading-none">Technical Assessment Complete</h1>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Your code and system design skills have been evaluated.</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -353,32 +341,34 @@ export default function TechnicalInterviewPage() {
     );
   }
 
+  // ==========================================
+  // RENDER 3: LIVE ASSESSMENT PLAYGROUND (Cu Chenarul Corect de Titlu)
+  // ==========================================
   return (
-    <div className="w-full h-[calc(100vh-210px)] flex flex-col gap-5 overflow-hidden animate-in fade-in duration-500">
+    <div className="w-full h-[calc(100vh-170px)] flex flex-col gap-5 overflow-hidden max-w-[1200px] mx-auto min-h-0 p-1 animate-in fade-in duration-500">
       
-      {/* HEADER BAR */}
-      <div className="flex items-center justify-between bg-[#0b0f1a]/60 border border-white/5 rounded-[20px] px-5 py-3 backdrop-blur-xl shrink-0 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-[12px] bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-            <Code2 size={18} />
+      {/* --- CHENAR TITLU GLASSMORPHISM PENTRU TITLU - IDENTIC CU LEARNING/JOBS --- */}
+      <div className="flex justify-between items-center bg-[#0b0f1a]/60 border border-white/5 p-5 rounded-[24px] shadow-lg backdrop-blur-xl shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-[14px] bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shadow-inner">
+            <Code2 size={20} />
           </div>
-          <div>
-            <h1 className="text-base font-black uppercase tracking-tight text-white leading-none">Technical Interview</h1>
-            <div className="flex items-center gap-1.5 mt-1">
-              <div className={cn("w-1.5 h-1.5 rounded-full", wsStatus === "connected" ? "bg-emerald-500 shadow-[0_0_5px_#10b981]" : "bg-amber-500 animate-pulse")} />
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                {wsStatus === "connected" ? "Live Environment" : "Simulation Mode"}
-              </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-indigo-400">
+               <Sparkles size={14} className="fill-current" />
+               <span className="text-[9px] font-black uppercase tracking-[0.3em]">Sandbox v3.10</span>
             </div>
+            <h1 className="text-2xl font-black tracking-tight text-white uppercase leading-none">Technical Assessment</h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Zona de Selector & Butoane așezate perfect la extremitatea dreaptă */}
+        <div className="flex items-center gap-3 shrink-0">
           <div className="relative">
             <select 
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className="appearance-none bg-[#020617] border border-white/10 rounded-[12px] pl-3 pr-8 py-2 text-[11px] font-bold text-white outline-none cursor-pointer hover:border-white/25 transition-all shadow-inner"
+              value={language} 
+              onChange={(e) => handleLanguageChange(e.target.value)} 
+              className="appearance-none bg-[#020617] border border-white/10 rounded-xl pl-3 pr-8 py-2 text-[10px] font-black uppercase tracking-widest text-white outline-none cursor-pointer"
             >
               <option value="python">Python 3.10</option>
               <option value="javascript">JavaScript</option>
@@ -386,18 +376,12 @@ export default function TechnicalInterviewPage() {
               <option value="java">Java 17</option>
               <option value="cpp">C++ 20</option>
             </select>
-            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <ChevronDown size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
           </div>
-
           <button 
-            onClick={handleRunCode}
-            disabled={isEvaluating}
-            className={cn(
-              "px-5 py-2 rounded-[12px] font-black text-[10px] uppercase tracking-[0.15em] transition-all flex items-center gap-2 shadow-xl outline-none",
-              isEvaluating 
-                ? "bg-white/10 text-white cursor-wait" 
-                : "bg-emerald-500 text-white hover:bg-emerald-400 active:scale-95"
-            )}
+            onClick={handleRunCode} 
+            disabled={isEvaluating} 
+            className="px-5 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-500 text-white hover:bg-emerald-400 flex items-center gap-1.5 transition-all shadow-lg active:scale-95"
           >
             {isEvaluating ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} className="fill-current" />}
             {isEvaluating ? "Running..." : "Run Code"}
@@ -405,55 +389,35 @@ export default function TechnicalInterviewPage() {
         </div>
       </div>
 
-      {/* SPLIT PANE */}
+      {/* SPLIT PANELS TRACK */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-0 overflow-hidden">
         
-        {/* === LEFT PANE: PROBLEM & CHAT === */}
-        <div className="lg:col-span-5 flex flex-col bg-[#0b0f1a]/60 border border-white/[0.06] rounded-[28px] overflow-hidden shadow-2xl backdrop-blur-xl h-full min-h-0">
-          
+        {/* === LEFT PANE: PROBLEM INFO & CHAT CONSOLE === */}
+        <div className="lg:col-span-5 flex flex-col bg-[#0b0f1a]/60 border border-white/[0.06] rounded-[28px] overflow-hidden h-full min-h-0 shadow-2xl backdrop-blur-xl">
           <div className="flex border-b border-white/5 bg-white/[0.01] shrink-0 p-1.5 gap-1.5">
-            <button 
-              onClick={() => setActiveTab("problem")}
-              className={cn(
-                "flex-1 py-2.5 rounded-[12px] text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5",
-                activeTab === "problem" ? "bg-white/5 text-white shadow-inner" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-              )}
-            >
-              <TerminalSquare size={14} /> Problem Info
-            </button>
-            <button 
-              onClick={() => setActiveTab("chat")}
-              className={cn(
-                "flex-1 py-2.5 rounded-[12px] text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5",
-                activeTab === "chat" ? "bg-white/5 text-white shadow-inner" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-              )}
-            >
-              <MessageSquare size={14} /> AI Interviewer
-            </button>
+            <button onClick={() => setActiveTab("problem")} className={cn("flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", activeTab === "problem" ? "bg-white/5 text-white shadow-inner" : "text-slate-500 hover:text-slate-300")}>Problem Info</button>
+            <button onClick={() => setActiveTab("chat")} className={cn("flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", activeTab === "chat" ? "bg-white/5 text-white shadow-inner" : "text-slate-500 hover:text-slate-300")}>AI Interviewer</button>
           </div>
-
+          
           <div className="flex-1 min-h-0 relative">
-            
             {/* PROBLEM TAB */}
             {activeTab === "problem" && (
-              <div className="absolute inset-0 overflow-y-auto custom-scrollbar p-6 space-y-5 animate-in fade-in duration-300">
+              <div className="absolute inset-0 overflow-y-auto custom-scrollbar p-5 space-y-4 animate-in fade-in duration-300">
                 {problem ? (
                   <>
-                    <h2 className="text-lg font-black text-white tracking-tight">{problem.title}</h2>
-                    <div className="text-xs font-medium text-slate-300 leading-relaxed whitespace-pre-wrap">
-                      {problem.description}
-                    </div>
-                    {problem.examples.map((ex, i) => (
-                      <div key={i} className="bg-white/[0.02] border border-white/5 rounded-[14px] p-4 space-y-1.5">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Example {i + 1}</p>
-                        <code className="block text-xs font-mono text-indigo-300 whitespace-pre-wrap bg-[#020617] p-3 rounded-xl border border-white/5">{ex}</code>
+                    <h2 className="text-base font-black text-white tracking-tight">{problem.title}</h2>
+                    <div className="text-xs font-medium text-slate-300 leading-relaxed whitespace-pre-wrap">{problem.description}</div>
+                    {problem.examples.map((ex: string, i: number) => (
+                      <div key={i} className="bg-white/[0.02] border border-white/5 rounded-[14px] p-3.5 space-y-1">
+                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Example {i + 1}</p>
+                        <code className="block text-xs font-mono text-indigo-300 whitespace-pre-wrap bg-[#020617] p-2.5 rounded-lg border border-white/5">{ex}</code>
                       </div>
                     ))}
                   </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-3">
-                    <Loader2 size={20} className="animate-spin text-indigo-500/40" />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Waiting for system init...</p>
+                  <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-2">
+                    <Loader2 size={16} className="animate-spin text-indigo-500/40" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Waiting for system init...</p>
                   </div>
                 )}
               </div>
@@ -462,52 +426,34 @@ export default function TechnicalInterviewPage() {
             {/* CHAT TAB */}
             {activeTab === "chat" && (
               <div className="absolute inset-0 flex flex-col min-h-0 bg-transparent animate-in fade-in duration-300">
-                <div ref={chatScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5 min-h-0">
+                <div ref={chatScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 min-h-0">
                   {messages.map((msg, i) => (
                     <div key={i} className={cn("flex flex-col max-w-[85%]", msg.from === "user" ? "ml-auto items-end" : "mr-auto items-start")}>
-                      <div className="flex items-center gap-1.5 mb-1 px-1">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                          {msg.from === "ai" ? "AI Interviewer" : "You"}
-                        </span>
-                        {msg.type === "feedback" && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[8px] font-bold uppercase tracking-wide">Evaluation</span>}
-                        {msg.type === "system_design" && <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 text-[8px] font-bold uppercase tracking-wide">System Design</span>}
+                      <div className="flex items-center gap-1 mb-1 px-1">
+                        <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider">{msg.from === "ai" ? "AI Interviewer" : "You"}</span>
+                        {msg.type === "feedback" && <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[7px] font-black uppercase">Evaluation</span>}
+                        {msg.type === "system_design" && <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 text-[7px] font-black uppercase">System Design</span>}
                       </div>
-                      <div className={cn(
-                        "px-4 py-2.5 rounded-[16px] text-xs font-medium leading-relaxed whitespace-pre-wrap shadow-inner",
-                        msg.from === "user" 
-                          ? "bg-indigo-600 text-white rounded-tr-sm shadow-indigo-500/10" 
-                          : "bg-white/5 text-slate-200 border border-white/5 rounded-tl-sm"
-                      )}>
+                      <div className={cn("px-3.5 py-2 rounded-2xl text-xs font-medium leading-relaxed whitespace-pre-wrap shadow-inner", msg.from === "user" ? "bg-indigo-600 text-white rounded-tr-sm shadow-indigo-500/10" : "bg-white/5 text-slate-200 border border-white/5 rounded-tl-sm")}>
                         {msg.text}
                       </div>
                     </div>
                   ))}
-                  
                   {isAiTyping && (
-                    <div className="flex flex-col max-w-[85%]" style={{ marginRight: 'auto', alignItems: 'flex-start' }}>
-                      <div className="mb-1 px-1">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">AI Interviewer</span>
-                      </div>
-                      <div className="px-4 py-3 bg-white/5 border border-white/5 rounded-[16px] rounded-tl-sm flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
+                    <div className="flex flex-col max-w-[85%] mr-auto items-start">
+                      <div className="mb-1 px-1"><span className="text-[8px] font-black text-slate-500 uppercase tracking-wider">AI Interviewer</span></div>
+                      <div className="px-3.5 py-2.5 bg-white/5 border border-white/5 rounded-2xl rounded-tl-sm flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
+                        <span className="w-1 h-1 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
+                        <span className="w-1 h-1 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
                       </div>
                     </div>
                   )}
                 </div>
-                
                 <form onSubmit={handleSendMessage} className="p-3 bg-white/[0.01] border-t border-white/5 shrink-0">
                   <div className="relative flex items-center">
-                    <input 
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      placeholder="Type your answer..."
-                      className="w-full bg-[#020617] border border-white/10 focus:border-indigo-500/40 rounded-[14px] pl-4 pr-10 py-3 text-xs font-medium text-white outline-none transition-all shadow-inner"
-                    />
-                    <button type="submit" disabled={!chatInput.trim()} className="absolute right-2 p-1.5 text-indigo-400 hover:text-white transition-colors disabled:opacity-20 bg-white/5 hover:bg-indigo-500 rounded-lg">
-                      <Send size={12} />
-                    </button>
+                    <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Type your answer..." className="w-full bg-[#020617] border border-white/10 focus:border-indigo-500/40 rounded-xl pl-4 pr-10 py-2.5 text-xs font-medium text-white outline-none transition-all shadow-inner" />
+                    <button type="submit" disabled={!chatInput.trim()} className="absolute right-2 p-1 text-indigo-400 hover:text-white transition-colors disabled:opacity-20 bg-white/5 hover:bg-indigo-500 rounded-lg"><Send size={12} /></button>
                   </div>
                 </form>
               </div>
@@ -515,71 +461,64 @@ export default function TechnicalInterviewPage() {
           </div>
         </div>
 
-        {/* === RIGHT PANE: MONACO EDITOR + RESULTS === */}
+        {/* === RIGHT PANE: MONACO CODE EDITOR ENVIRONMENT === */}
         <div className="lg:col-span-7 flex flex-col gap-4 h-full min-h-0 overflow-hidden">
-          
           <div className="flex-1 bg-[#0b0f1a] border border-white/[0.06] rounded-[28px] overflow-hidden shadow-2xl relative pt-3 min-h-0">
-            <Editor
-              height="100%"
-              language={language}
-              theme="careerpath-dark"
-              value={code}
-              onChange={(val) => setCode(val || "")}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                padding: { top: 10 },
-                scrollBeyondLastLine: false,
-                smoothScrolling: true,
-                cursorBlinking: "smooth",
-                renderLineHighlight: "none",
-                lineNumbersMinChars: 3
-              }}
+            <Editor 
+              height="100%" 
+              language={language} 
+              theme="careerpath-dark" 
+              value={code} 
+              onChange={(val) => setCode(val || "")} 
+              options={{ 
+                minimap: { enabled: false }, 
+                fontSize: 13, 
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace", 
+                padding: { top: 10 }, 
+                scrollBeyondLastLine: false, 
+                smoothScrolling: true, 
+                cursorBlinking: "smooth", 
+                renderLineHighlight: "none", 
+                lineNumbersMinChars: 3 
+              }} 
             />
-            
             {isEvaluating && (
               <div className="absolute inset-0 bg-[#0b0f1a]/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 animate-in fade-in duration-200">
-                <Loader2 size={24} className="animate-spin text-indigo-400 mb-3" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Evaluating Test Cases...</p>
+                <Loader2 size={20} className="animate-spin text-indigo-400 mb-2" />
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300">Evaluating Test Cases...</p>
               </div>
             )}
           </div>
 
-          {/* TEST RESULTS PANEL */}
+          {/* EXECUTION MATRIX PANEL */}
           {testResults && (
-            <div className="h-40 shrink-0 bg-[#0b0f1a]/80 border border-white/[0.06] rounded-[28px] p-5 backdrop-blur-xl shadow-2xl overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom-6 duration-300">
-              <div className="flex items-center gap-2 mb-3">
-                <TerminalSquare size={14} className="text-slate-500" />
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Execution Matrix</h3>
+            <div className="h-40 shrink-0 bg-[#0b0f1a]/80 border border-white/[0.06] rounded-[28px] p-4 backdrop-blur-xl shadow-2xl overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom-6 duration-300">
+              <div className="flex items-center gap-2 mb-2.5">
+                <TerminalSquare size={12} className="text-slate-500" />
+                <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Execution Matrix</h3>
               </div>
-              
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {testResults.map((tc, idx) => (
-                  <div key={idx} className="bg-white/[0.01] border border-white/5 rounded-[14px] p-3 flex items-center justify-between shadow-inner">
+                  <div key={idx} className="bg-white/[0.01] border border-white/5 rounded-xl p-2.5 flex items-center justify-between shadow-inner">
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold text-slate-300 truncate pr-1">{tc.name}</p>
-                      <div className="flex items-center gap-2 text-[9px] font-medium text-slate-500 mt-1">
+                      <div className="flex items-center gap-2 text-[8px] font-medium text-slate-500 mt-0.5">
                         <span className="flex items-center gap-0.5"><Clock size={9}/> {tc.time}</span>
                         <span className="flex items-center gap-0.5"><Cpu size={9}/> {tc.memory}</span>
                       </div>
                     </div>
                     {tc.passed ? (
-                      <div className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg shrink-0">
-                        <CheckCircle2 size={12} /> <span className="text-[9px] font-black uppercase tracking-wider">Pass</span>
-                      </div>
+                      <div className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg shrink-0 border border-emerald-500/10 text-[9px] font-black uppercase tracking-wider">Pass</div>
                     ) : (
-                      <div className="flex items-center gap-1 text-red-400 bg-red-500/10 px-2 py-1 rounded-lg shrink-0">
-                        <XCircle size={12} /> <span className="text-[9px] font-black uppercase tracking-wider">Fail</span>
-                      </div>
+                      <div className="flex items-center gap-1 text-red-400 bg-red-500/10 px-2 py-0.5 rounded-lg shrink-0 border border-red-500/10 text-[9px] font-black uppercase tracking-wider">Fail</div>
                     )}
                   </div>
                 ))}
               </div>
             </div>
           )}
-
         </div>
+
       </div>
     </div>
   );
