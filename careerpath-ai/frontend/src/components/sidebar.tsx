@@ -16,8 +16,8 @@ const menuItems = [
   { icon: GraduationCap, label: "Learning", href: "/learning/path" },
   { icon: FileUp, label: "Upload CV", href: "/upload" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
-  { icon: Users, label: "Interviews HR", href: "/interviews-hr" },
-  { icon: Code, label: "Interviews Tech", href: "/interviews-tech" },
+  { icon: Users, label: "Interviews HR", href: "/hr" },
+  { icon: Code, label: "Interviews Tech", href: "/technical" },
 ];
 
 export function Sidebar() {
