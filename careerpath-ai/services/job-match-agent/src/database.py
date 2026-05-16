@@ -1,69 +1,104 @@
-import asyncpg
-import json
-from .config import DATABASE_URL
+import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base, mapped_column, Mapped
+from sqlalchemy import Integer, String, Text, Float, DateTime, func, select, delete
 
-async def get_db_pool():
-    """Creates and returns a database connection pool."""
-    return await asyncpg.create_pool(DATABASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL").replace("postgresql://", "postgresql+asyncpg://")
 
-async def save_job_matches(pool, user_id: str, matched_jobs: list[dict]):
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+Base = declarative_base()
+
+# -----------------
+# ORM Models
+# -----------------
+class ScrapedJob(Base):
+    __tablename__ = 'scraped_jobs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    scrape_run_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String)
+    company: Mapped[str] = mapped_column(String)
+    description: Mapped[str] = mapped_column(Text)
+    seniority: Mapped[str] = mapped_column(String)
+    url: Mapped[str] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String)
+    location: Mapped[str] = mapped_column(String)
+
+class JobMatch(Base):
+    __tablename__ = 'job_matches'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    job_title: Mapped[str] = mapped_column(String)
+    company: Mapped[str] = mapped_column(String)
+    url: Mapped[str] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String)
+    location: Mapped[str] = mapped_column(String)
+    match_score: Mapped[float] = mapped_column(Float)
+    reason: Mapped[str] = mapped_column(Text)
+    generated_cover_letter: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
+
+# -----------------
+# Database Operations
+# -----------------
+async def get_db_session() -> AsyncSession:
+    """Dependency for providing a database session."""
+    async with AsyncSessionLocal() as session:
+        yield session
+
+async def save_job_matches(session: AsyncSession, user_id: str, matched_jobs: list[dict]):
     """
-    Saves the matched jobs to the PostgreSQL database.
-    This function first deletes old matches for the user, then inserts the new ones.
-    """
-    # The `job_matches` table is assumed to exist.
-    # It should have columns like: user_id, job_title, ..., generated_cover_letter (TEXT)
-    delete_query = "DELETE FROM job_matches WHERE user_id = $1;"
-    insert_query = """
-    INSERT INTO job_matches (user_id, job_title, company, url, source, location, match_score, reason, generated_cover_letter, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW());
-    """
-    try:
-        async with pool.acquire() as connection:
-            async with connection.transaction():
-                # Delete old matches
-                await connection.execute(delete_query, user_id)
-
-                # Insert new matches
-                records_to_insert = [
-                    (
-                        user_id,
-                        job.get("title"),
-                        job.get("company"),
-                        job.get("url"),
-                        job.get("source"),
-                        job.get("location"),
-                        job.get("match_score"),
-                        job.get("reason"),
-                        job.get("generated_cover_letter")
-                    ) for job in matched_jobs
-                ]
-                # copy_records_to_table is more efficient for bulk inserts
-                await connection.copy_records_to_table(
-                    'job_matches',
-                    records=records_to_insert,
-                    columns=[
-                        'user_id', 'job_title', 'company', 'url', 'source',
-                        'location', 'match_score', 'reason', 'generated_cover_letter'
-                    ]
-                )
-        print(f"💾 {len(matched_jobs)} job matches for user {user_id} saved to database.")
-    except Exception as e:
-        print(f"❌ Error saving job matches to database: {e}")
-
-
-async def get_job_matches_for_user(pool, user_id: str) -> list[dict]:
-    """Retrieves all matched jobs for a user from the database."""
-    query = """
-    SELECT job_title, company, url, source, location, match_score, reason, generated_cover_letter, created_at
-    FROM job_matches
-    WHERE user_id = $1
-    ORDER BY match_score DESC;
+    Saves matched jobs using SQLAlchemy ORM.
     """
     try:
-        async with pool.acquire() as connection:
-            rows = await connection.fetch(query, user_id)
-            return [dict(row) for row in rows]
+        await session.execute(delete(JobMatch).where(JobMatch.user_id == user_id))
+
+        new_matches = []
+        for job in matched_jobs:
+            new_match = JobMatch(
+                user_id=user_id,
+                job_title=job.get("title"),
+                company=job.get("company"),
+                url=job.get("url"),
+                source=job.get("source"),
+                location=job.get("location"),
+                match_score=job.get("match_score"),
+                reason=job.get("reason"),
+                generated_cover_letter=job.get("generated_cover_letter")
+            )
+            new_matches.append(new_match)
+
+        session.add_all(new_matches)
+        await session.commit()
+
+        print(f"Saved {len(matched_jobs)} job matches for user {user_id} via ORM.")
     except Exception as e:
-        print(f"❌ Error retrieving job matches: {e}")
-        return []
+        await session.rollback()
+        print(f"Error saving job matches to database: {e}")
+
+async def get_jobs_by_scrape_run(session: AsyncSession, scrape_run_id: str) -> list[ScrapedJob]:
+    """Extrage joburile scrapate pentru a le trimite spre Qdrant/Gemini."""
+    stmt = select(ScrapedJob).where(ScrapedJob.scrape_run_id == scrape_run_id)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+async def get_job_matches_for_user(session: AsyncSession, user_id: str) -> list[dict]:
+    """Retrieves all matched jobs for a user from the database via ORM."""
+    stmt = select(JobMatch).where(JobMatch.user_id == user_id).order_by(JobMatch.match_score.desc())
+    result = await session.execute(stmt)
+    matches = result.scalars().all()
+
+    return [{
+        "job_title": m.job_title,
+        "company": m.company,
+        "url": m.url,
+        "source": m.source,
+        "location": m.location,
+        "match_score": m.match_score,
+        "reason": m.reason,
+        "generated_cover_letter": m.generated_cover_letter,
+        "created_at": m.created_at
+    } for m in matches]

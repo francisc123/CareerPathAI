@@ -1,19 +1,26 @@
 import json
 import logging
-from qdrant_client import AsyncQdrantClient, models
+import asyncio
+
+from qdrant_client import AsyncQdrantClient
+from qdrant_client.http import models
+
 from google import genai
 from google.genai import types
+
 from .config import GEMINI_API_KEY, RERANK_MODEL_NAME
 from .prompts import (
     RERANK_SYSTEM_PROMPT, get_rerank_user_prompt,
     COVER_LETTER_SYSTEM_PROMPT, get_cover_letter_user_prompt
 )
-from .qdrant_client import get_cv_details, find_similar_jobs
+
+from .qdrant_service import get_cv_details, find_similar_jobs
 
 logger = logging.getLogger(__name__)
 
-_client: genai.Client | None = None
+from typing import Optional
 
+_client: Optional[genai.Client] = None
 
 def get_gemini_client() -> genai.Client:
     global _client
@@ -21,9 +28,20 @@ def get_gemini_client() -> genai.Client:
         _client = genai.Client(api_key=GEMINI_API_KEY)
     return _client
 
+async def generate_embeddings(texts: list[str]) -> list[list[float]]:
+    """Transformă descrierile joburilor în vectori folosind Gemini."""
+    try:
+        response = get_gemini_client().models.embed_content(
+            model="text-embedding-004",
+            contents=texts
+        )
+        return [emb.values for emb in response.embeddings]
+    except Exception as e:
+        logger.error("Error generating embeddings: %s", e)
+        return []
 
 async def generate_cover_letter(cv_text: str, job: dict) -> str:
-    """Generates a cover letter for the top matched job using Gemini."""
+    """Generates a cover letter for a matched job using Gemini."""
     user_prompt = get_cover_letter_user_prompt(cv_text, job)
     try:
         response = get_gemini_client().models.generate_content(
@@ -37,7 +55,6 @@ async def generate_cover_letter(cv_text: str, job: dict) -> str:
     except Exception as e:
         logger.error("Error generating cover letter: %s", e)
         return ""
-
 
 async def rerank_jobs_with_llm(cv_text: str, candidate_jobs: list[models.ScoredPoint]) -> list[dict]:
     """Uses Gemini to re-rank a list of candidate jobs against a CV."""
@@ -69,15 +86,15 @@ async def rerank_jobs_with_llm(cv_text: str, candidate_jobs: list[models.ScoredP
                 final_jobs.append(job)
 
         final_jobs.sort(key=lambda x: x['match_score'], reverse=True)
-        return final_jobs
+        # Tăiem rezultatele la top 10
+        return final_jobs[:10]
 
     except Exception as e:
         logger.error("Error re-ranking jobs with LLM: %s", e)
         return []
 
-
 async def find_and_match_jobs(user_id: str, cv_text: str, qdrant: AsyncQdrantClient) -> list[dict]:
-    """Orchestrates the entire job matching process."""
+    """Orchestrates the vector search, reranking and cover letter generation."""
     logger.info("Starting job match process for user: %s", user_id)
 
     cv_vector, seniority = await get_cv_details(user_id, qdrant)
@@ -92,10 +109,14 @@ async def find_and_match_jobs(user_id: str, cv_text: str, qdrant: AsyncQdrantCli
     logger.info("Re-ranked down to %d final job matches.", len(ranked_jobs))
 
     if ranked_jobs:
-        top_job = ranked_jobs[0]
-        logger.info("Generating cover letter for top job: %s", top_job.get('title'))
-        cover_letter = await generate_cover_letter(cv_text, top_job)
-        for job in ranked_jobs:
-            job['generated_cover_letter'] = cover_letter
+        logger.info("Generating personalized cover letters concurrently...")
+
+        async def fetch_letter_for_job(job):
+            letter = await generate_cover_letter(cv_text, job)
+            job['generated_cover_letter'] = letter
+            return job
+
+        tasks = [fetch_letter_for_job(job) for job in ranked_jobs]
+        ranked_jobs = await asyncio.gather(*tasks)
 
     return ranked_jobs
