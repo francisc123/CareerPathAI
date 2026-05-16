@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import { 
   TerminalSquare, 
@@ -16,7 +17,9 @@ import {
   ChevronDown,
   Award,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CVScoreGauge } from "@/components/ui/cv-score-gauge";
@@ -56,6 +59,10 @@ interface FinalResults {
 }
 
 export default function TechnicalInterviewPage() {
+  // --- MOCK GLOBAL STATE ---
+  // Setat pe false pentru a arăta starea blocată la început
+  const [hasPassedQuiz, setHasPassedQuiz] = useState(false); 
+
   // --- STATE ---
   const [wsStatus, setWsStatus] = useState<WSStatus>("connecting");
   const [interviewState, setInterviewState] = useState<InterviewState>("ongoing");
@@ -117,6 +124,8 @@ export default function TechnicalInterviewPage() {
 
   // --- WEBSOCKET CONNECTION ---
   const connectWS = useCallback(() => {
+    if (!hasPassedQuiz) return;
+
     const sessionId = "session_" + Math.floor(Math.random() * 10000); 
     const wsUrl = process.env.NEXT_PUBLIC_TECH_WS_URL || `ws://localhost:8010/ws/tech-interview/${sessionId}`;
     
@@ -162,17 +171,18 @@ export default function TechnicalInterviewPage() {
       setTimeout(connectWS, 5000);
     };
     ws.onerror = () => ws.close();
-  }, []);
+  }, [hasPassedQuiz]);
 
   useEffect(() => {
-    connectWS();
+    if (hasPassedQuiz) {
+      connectWS();
+    }
     return () => wsRef.current?.close();
-  }, [connectWS]);
+  }, [connectWS, hasPassedQuiz]);
 
   // --- DYNAMIC LANGUAGE CHANGE HANDLER ---
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    // Înlocuiește complet textul din editor cu șablonul curat al limbajului ales
     setCode(STARTER_TEMPLATES[newLang] || "");
   };
 
@@ -244,6 +254,45 @@ export default function TechnicalInterviewPage() {
       }, 1500);
     }
   };
+
+  // ==========================================
+  // RENDER 1: LOCKED STATE (Nu a luat nota bună la Quiz-uri)
+  // ==========================================
+  if (!hasPassedQuiz) {
+    return (
+      <div className="w-full h-[calc(100vh-210px)] flex flex-col items-center justify-center animate-in zoom-in-95 duration-500">
+        <div className="max-w-md w-full bg-[#0b0f1a]/80 border border-white/5 rounded-[40px] p-10 flex flex-col items-center text-center shadow-2xl backdrop-blur-xl relative overflow-hidden">
+          
+          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-[50px] pointer-events-none" />
+          
+          <div className="w-20 h-20 rounded-[24px] bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20 mb-8 shadow-inner">
+            <Lock size={32} />
+          </div>
+          
+          <h2 className="text-2xl font-black uppercase tracking-tight text-white leading-none mb-3">Interview Locked</h2>
+          <p className="text-sm font-medium text-slate-400 leading-relaxed mb-8">
+            You need to achieve an <strong className="text-indigo-400">80% passing score</strong> in your core learning modules before unlocking the AI Simulation.
+          </p>
+
+          <Link 
+            href="/learning/path" 
+            className="w-full py-4 rounded-[16px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 bg-white text-black hover:bg-indigo-500 hover:text-white shadow-xl active:scale-95"
+          >
+            <BookOpen size={16} /> Resume Learning Path
+          </Link>
+
+          {/* HIDDEN DEV BUTTON */}
+          <button 
+            onClick={() => setHasPassedQuiz(true)} 
+            className="mt-6 text-[9px] font-black text-slate-600 uppercase tracking-widest hover:text-white transition-colors"
+          >
+            [Dev: Click to Unlock]
+          </button>
+
+        </div>
+      </div>
+    );
+  }
 
   // --- INTERVIEW COMPLETED VIEW ---
   if (interviewState === "completed" && results) {
@@ -328,7 +377,7 @@ export default function TechnicalInterviewPage() {
           <div className="relative">
             <select 
               value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)} // Înlocuire cu handler-ul dinamic
+              onChange={(e) => handleLanguageChange(e.target.value)}
               className="appearance-none bg-[#020617] border border-white/10 rounded-[12px] pl-3 pr-8 py-2 text-[11px] font-bold text-white outline-none cursor-pointer hover:border-white/25 transition-all shadow-inner"
             >
               <option value="python">Python 3.10</option>
