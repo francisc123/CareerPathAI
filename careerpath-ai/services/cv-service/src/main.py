@@ -74,6 +74,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="CV Service")
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "cv-service"}
+
 # Endpoints
 @app.post("/upload")
 async def upload_cv(

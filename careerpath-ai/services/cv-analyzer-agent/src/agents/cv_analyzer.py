@@ -129,6 +129,7 @@ def process_cv_pipeline(cv_text: str, user_id: str) -> dict:
         "seniority": analiza.seniority,
         "target_role": analiza.target_role,
         "skills_extracted": analiza.skills,
+        "gaps": analiza.gaps,
         "gaps_identified": analiza.gaps,
         "score_breakdown": analiza.score_breakdown.model_dump(),
     }
