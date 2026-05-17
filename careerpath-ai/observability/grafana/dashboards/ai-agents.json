@@ -1,0 +1,97 @@
+{
+  "title": "CareerPath — AI Agents & Cost",
+  "uid": "cp-ai-agents",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["careerpath", "ai", "cost"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "AI Agent — Requests / sec",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "expr": "sum by (job) (rate(http_requests_total{job=~\".*-agent|agent-orchestrator\"}[5m]))",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "AI Agent — Latency p95",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket{job=~\".*-agent|agent-orchestrator\"}[5m])))",
+          "legendFormat": "{{job}} p95"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Estimated Gemini calls / min (handler-derived)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Counts POST/GET handler invocations that trigger Gemini (cv-analyzer, learning-path, interview agents). Approximation — wire a dedicated counter if exact cost matters.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "opm" } },
+      "targets": [
+        {
+          "expr": "60 * sum by (job) (rate(http_requests_total{job=~\"cv-analyzer-agent|learning-path-agent|hr-interview-agent|technical-interview-agent\"}[5m]))",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Estimated AI cost / day (USD, very rough)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Heuristic: 1 handler call ≈ 1 Gemini 2.5-flash call ≈ $0.0005. Replace with real token-based metric when available.",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2 } },
+      "targets": [
+        {
+          "expr": "0.0005 * 86400 * sum(rate(http_requests_total{job=~\"cv-analyzer-agent|learning-path-agent|hr-interview-agent|technical-interview-agent\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Active WebSocket sessions (orchestrator + interviews)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "expr": "sum by (job) (http_requests_in_progress{job=~\"agent-orchestrator|hr-interview-agent|technical-interview-agent\"})",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Qdrant request latency p95 (if exposed)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Requires a Qdrant scrape target with /metrics enabled.",
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 21 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(qdrant_rest_responses_duration_seconds_bucket[5m])))",
+          "legendFormat": "qdrant p95"
+        }
+      ]
+    }
+  ]
+}

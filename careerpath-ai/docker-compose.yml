@@ -172,6 +172,10 @@ services:
     container_name: cp-hr-agent
     ports: ["8009:8009"]
     <<: *python-ai-defaults
+    environment:
+      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+    volumes:
+      - ./keys:/app/keys:ro
     profiles: [agents]
 
   technical-interview-agent:
@@ -179,6 +183,10 @@ services:
     container_name: cp-tech-agent
     ports: ["8010:8010"]
     <<: *python-ai-defaults
+    environment:
+      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+    volumes:
+      - ./keys:/app/keys:ro
     profiles: [agents]
 
   # ── Layer 5 · Infrastructure (fara profile — porneste mereu) ──────────────

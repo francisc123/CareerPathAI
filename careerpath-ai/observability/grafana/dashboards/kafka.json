@@ -1,0 +1,79 @@
+{
+  "title": "CareerPath — Kafka / Redpanda",
+  "uid": "cp-kafka",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["careerpath", "kafka", "redpanda"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Consumer lag per topic+partition",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "redpanda_kafka_consumer_group_lag",
+          "legendFormat": "{{group}} • {{topic}}[{{partition}}]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Messages produced / sec (per topic)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(redpanda_kafka_request_bytes{request=\"produce\"}[5m]))",
+          "legendFormat": "{{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Messages consumed / sec (per topic)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(redpanda_kafka_request_bytes{request=\"consume\"}[5m]))",
+          "legendFormat": "{{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Active consumer groups",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 17 },
+      "targets": [
+        {
+          "expr": "count(count by (group) (redpanda_kafka_consumer_group_lag))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "DLQ messages / sec",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 17 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(redpanda_kafka_request_bytes{topic=~\".*\\\\.dlq\",request=\"produce\"}[5m]))",
+          "legendFormat": "{{topic}}"
+        }
+      ]
+    }
+  ]
+}

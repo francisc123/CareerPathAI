@@ -1,76 +1,124 @@
 import asyncio
 import json
+import logging
+
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from .config import KAFKA_BROKERS, TOPIC_GAPS_IDENTIFIED, TOPIC_LEARNING_PATH_CREATED
+from aiokafka.errors import KafkaError
+
+from .config import (
+    KAFKA_BROKERS,
+    TOPIC_GAPS_IDENTIFIED,
+    TOPIC_GAPS_IDENTIFIED_DLQ,
+    TOPIC_LEARNING_PATH_CREATED,
+)
+from .database import get_db_pool, get_user_difficulty_signal, save_learning_path
 from .generator import generate_learning_path_structure
-from .database import get_db_pool, save_learning_path
 
-async def process_message(message, db_pool, producer):
-    """Processes a single Kafka message."""
+logger = logging.getLogger(__name__)
+
+
+async def process_message(message, db_pool, producer, dlq_producer) -> None:
+    """Process a single `gaps.identified` message."""
+    raw_value = message.value
     try:
-        data = json.loads(message.value.decode("utf-8"))
-        user_id = data.get("user_id")
-        gaps = data.get("gaps")
-        target_role = data.get("target_role")
+        data = json.loads(raw_value.decode("utf-8"))
+    except json.JSONDecodeError:
+        logger.exception("Could not decode message JSON — sending raw bytes to DLQ.")
+        await dlq_producer.send_and_wait(TOPIC_GAPS_IDENTIFIED_DLQ, raw_value)
+        return
 
-        if not all([user_id, gaps, target_role]):
-            print("Error: Missing required fields in message")
-            return
+    user_id = data.get("user_id")
+    gaps = data.get("gaps")
+    target_role = data.get("target_role")
 
-        print(f"📨 Received gap analysis for user: {user_id}")
+    if not all([user_id, gaps, target_role]):
+        logger.warning("Missing required fields in gaps.identified payload — DLQ.")
+        await dlq_producer.send_and_wait(
+            TOPIC_GAPS_IDENTIFIED_DLQ,
+            json.dumps({"reason": "missing_fields", "payload": data}).encode("utf-8"),
+        )
+        return
 
-        # 1. Generate learning path
-        path_json_string = await generate_learning_path_structure(gaps, target_role)
+    logger.info("Received gap analysis for user: %s", user_id)
+
+    try:
+        difficulty = await get_user_difficulty_signal(db_pool, user_id)
+        path_json_string = await generate_learning_path_structure(
+            gaps, target_role, difficulty_hint=difficulty.get("hint"),
+        )
         if not path_json_string:
-            print(f"Skipping database save and Kafka publish for user {user_id} due to generation failure.")
+            logger.warning(
+                "Learning path generation returned empty for %s — sending to DLQ.",
+                user_id,
+            )
+            await dlq_producer.send_and_wait(
+                TOPIC_GAPS_IDENTIFIED_DLQ,
+                json.dumps({"reason": "generation_failed", "payload": data}).encode("utf-8"),
+            )
             return
 
         path_data = json.loads(path_json_string)
 
-        # 2. Save to database
         await save_learning_path(db_pool, user_id, target_role, path_data)
 
-        # 3. Publish event
         await producer.send_and_wait(
             TOPIC_LEARNING_PATH_CREATED,
-            {"user_id": user_id, "status": "created", "title": path_data.get("title")}
+            json.dumps(
+                {
+                    "user_id": user_id,
+                    "status": "created",
+                    "title": path_data.get("title"),
+                }
+            ).encode("utf-8"),
         )
-        print(f"🏁 Published 'learning.path.created' for user: {user_id}")
+        logger.info("Published 'learning.path.created' for user: %s", user_id)
 
-    except json.JSONDecodeError:
-        print("Error: Could not decode message JSON")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    except Exception as exc:
+        logger.exception("Unhandled error processing %s — DLQ.", user_id)
+        await dlq_producer.send_and_wait(
+            TOPIC_GAPS_IDENTIFIED_DLQ,
+            json.dumps(
+                {"reason": "exception", "error": str(exc), "payload": data}
+            ).encode("utf-8"),
+        )
 
-async def consume():
-    """Main consumer loop."""
+
+async def consume() -> None:
+    """Main consumer loop with separate DLQ producer."""
     db_pool = await get_db_pool()
-    producer = AIOKafkaProducer(
-        bootstrap_servers=KAFKA_BROKERS,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    )
+    producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BROKERS)
+    dlq_producer = AIOKafkaProducer(bootstrap_servers=KAFKA_BROKERS)
     consumer = AIOKafkaConsumer(
         TOPIC_GAPS_IDENTIFIED,
         bootstrap_servers=KAFKA_BROKERS,
         group_id="learning-path-agent-group",
-        auto_offset_reset="latest",
+        auto_offset_reset="earliest",
+        enable_auto_commit=False,
     )
 
     await producer.start()
+    await dlq_producer.start()
     await consumer.start()
 
-    print(f"👂 Consumer started on topic '{TOPIC_GAPS_IDENTIFIED}'...")
+    logger.info("Consumer started on topic '%s'.", TOPIC_GAPS_IDENTIFIED)
     try:
         async for message in consumer:
-            await process_message(message, db_pool, producer)
+            try:
+                await process_message(message, db_pool, producer, dlq_producer)
+                await consumer.commit()
+            except KafkaError:
+                # Don't commit — let the broker redeliver after rebalance.
+                logger.exception("Kafka error while processing message — not committing.")
     finally:
         await consumer.stop()
         await producer.stop()
+        await dlq_producer.stop()
         await db_pool.close()
-        print("🛑 Consumer and connections stopped.")
+        logger.info("Consumer and connections stopped.")
 
-def run_consumer_in_background():
-    """Runs the Kafka consumer in a background asyncio task."""
-    print("🚀 Starting background Kafka consumer...")
+
+def run_consumer_in_background() -> None:
+    """Schedule the consumer as a background asyncio task."""
+    logger.info("Starting background Kafka consumer for learning-path-agent.")
     loop = asyncio.get_event_loop()
     loop.create_task(consume())

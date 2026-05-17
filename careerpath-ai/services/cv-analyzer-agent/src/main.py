@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from src.consumers.cv_upload_consumer import consume_cv_uploaded_events
 from src.db.cv_repository import init_db_pool, close_db_pool
 from src.publishers.cv_analyzed_publisher import init_producer, stop_producer
-from src.routers import health
+from src.routers import ats_match, health
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,3 +44,4 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(ats_match.router)
