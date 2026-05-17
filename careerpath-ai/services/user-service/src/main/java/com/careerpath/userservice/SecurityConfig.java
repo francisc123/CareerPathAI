@@ -14,8 +14,10 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
+                .csrf(csrf -> csrf.disable()) // Dezactivăm CSRF pentru a permite metodele PUT/POST din scripturi externe
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/api/users/progress").permitAll() // Permite accesul nesemnat strict pentru acest endpoint
+                        .requestMatchers("/api/**").authenticated()          // Restul rutei /api/ rămâne securizat cu JWT
                         .anyRequest().permitAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));

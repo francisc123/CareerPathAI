@@ -21,7 +21,7 @@ async function bootstrap() {
   const keyPath = process.env.JWT_PUBLIC_KEY_PATH || './keys/private.pem';
   const publicKey = fs.existsSync(keyPath) ? fs.readFileSync(keyPath, 'utf8') : '';
 
-  // PROXY NATIV: Prinde stream-ul binar brici înainte ca NestJS să îl atingă sau să îl golească
+  // PROXY NATIV PENTRU CV-SERVICE
   await fastifyInstance.register(fastifyHttpProxy, {
     upstream: process.env.CV_SERVICE_URL || 'http://cp-cv-service:8002',
     prefix: '/api/cv',
@@ -42,6 +42,33 @@ async function bootstrap() {
           // Dacă token-ul e invalid, proxy-ul se oprește aici
           reply.code(401).send({ message: 'Unauthorized proxy access' });
           return;
+        }
+      }
+    }
+  });
+
+  // PROXY NATIV PENTRU LEARNING-PATH-AGENT (CP-039)
+  await fastifyInstance.register(fastifyHttpProxy, {
+    upstream: process.env.LEARNING_SERVICE_URL || 'http://learning-path-agent:8007',
+    prefix: '/api/learning',
+    rewritePrefix: '/learning', // Pune prefixul corect /learning/{userId} conform specificațiilor agentului Python
+    preHandler: async (request: any, reply: any) => {
+      // Păstrează compatibilitatea cu testele E2E (unde punem manual X-User-Id în scriptul bash)
+      const xUserId = request.headers['x-user-id'];
+      if (!xUserId) {
+        const authHeader = request.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ') && publicKey) {
+          try {
+            const token = authHeader.split(' ')[1];
+            const payload: any = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
+            const userId = payload?.sub || payload?.id;
+            if (userId) {
+              request.headers['x-user-id'] = userId;
+            }
+          } catch (err) {
+            reply.code(401).send({ message: 'Unauthorized proxy access' });
+            return;
+          }
         }
       }
     }

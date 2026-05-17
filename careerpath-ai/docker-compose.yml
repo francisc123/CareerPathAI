@@ -127,7 +127,6 @@ services:
     <<: *node-defaults
     depends_on:
       redpanda: { condition: service_healthy }
-    healthcheck: disable
     environment:
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025

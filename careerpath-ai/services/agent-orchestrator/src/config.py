@@ -5,6 +5,7 @@ load_dotenv()
 
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "localhost:19092")
 TOPIC_CV_ANALYZED = "cv.analyzed"
+TOPIC_LEARNING_COMPLETED = "learning.completed"
 TOPIC_GAPS_IDENTIFIED = "gaps.identified"
 TOPIC_ORCHESTRATOR_DLQ = "orchestrator.dlq"
 JOB_SCRAPER_URL = os.getenv("JOB_SCRAPER_URL", "http://cp-job-scraper:8003")

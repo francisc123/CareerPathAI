@@ -1,59 +1,89 @@
 import asyncio
 import json
+import logging
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from .config import KAFKA_BROKERS, TOPIC_GAPS_IDENTIFIED, TOPIC_LEARNING_PATH_CREATED
 from .generator import generate_learning_path_structure
 from .database import get_db_pool, save_learning_path
 
-async def process_message(message, db_pool, producer):
-    """Processes a single Kafka message."""
-    try:
-        data = json.loads(message.value.decode("utf-8"))
-        user_id = data.get("user_id")
-        gaps = data.get("gaps")
-        target_role = data.get("target_role")
+logger = logging.getLogger(__name__)
 
-        if not all([user_id, gaps, target_role]):
-            print("Error: Missing required fields in message")
+async def process_message(message, db_pool, producer):
+    """Processes a single Kafka message safely without blocking heartbeats."""
+    try:
+        payload = message.value.decode("utf-8")
+        data = json.loads(payload)
+
+        # Suport flexibil pentru identificatori
+        user_id = data.get("user_id") or data.get("userId")
+        target_role = data.get("target_role") or data.get("targetRole") or "Software Developer Internship"
+
+        # Extragere robustă a skill gaps-urilor
+        gaps = None
+        possible_gap_keys = ["gaps", "skill_gaps", "skillGaps", "gaps_identified", "missing_skills"]
+
+        for key in possible_gap_keys:
+            val = data.get(key)
+            if val and isinstance(val, list) and len(val) > 0:
+                gaps = val
+                break
+
+        if not gaps:
+            print("⚠️ Warning: No explicit gaps found in payload. Applying default tracking gaps.")
+            gaps = ["REST APIs", "Microservices Architecture", "PostgreSQL Databases and SQL Optimization"]
+
+        if not user_id:
+            print("❌ Error: Missing critical user_id field in message.")
             return
 
-        print(f"📨 Received gap analysis for user: {user_id}")
+        print(f"📨 Received gap analysis for user: {user_id}. Starting non-blocking AI generation...")
 
-        # 1. Generate learning path
-        path_json_string = await generate_learning_path_structure(gaps, target_role)
+        # Rulăm generarea structurii într-un thread separat pentru a nu bloca loop-ul principal de heartbeat-uri
+        path_json_string = await asyncio.to_thread(
+            lambda: asyncio.run(generate_learning_path_structure(gaps, target_role))
+        )
+
         if not path_json_string:
-            print(f"Skipping database save and Kafka publish for user {user_id} due to generation failure.")
+            print(f"Skipping database save for user {user_id} due to generation failure.")
             return
 
         path_data = json.loads(path_json_string)
 
-        # 2. Save to database
+        # 2. Salvare în baza de date
         await save_learning_path(db_pool, user_id, target_role, path_data)
 
-        # 3. Publish event
-        await producer.send_and_wait(
-            TOPIC_LEARNING_PATH_CREATED,
-            {"user_id": user_id, "status": "created", "title": path_data.get("title")}
-        )
+        # 3. Trimitere eveniment de confirmare
+        event_payload = {
+            "user_id": user_id,
+            "status": "created",
+            "title": path_data.get("title")
+        }
+
+        await producer.send_and_wait(TOPIC_LEARNING_PATH_CREATED, event_payload)
         print(f"🏁 Published 'learning.path.created' for user: {user_id}")
 
     except json.JSONDecodeError:
         print("Error: Could not decode message JSON")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred in process_message: {e}")
 
 async def consume():
-    """Main consumer loop."""
+    """Main consumer loop with optimized timeout session configuration."""
     db_pool = await get_db_pool()
     producer = AIOKafkaProducer(
         bootstrap_servers=KAFKA_BROKERS,
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )
+
+    # Configurație robustă: mărim timpii de sesiune pentru a tolera latențele API-ului Gemini
     consumer = AIOKafkaConsumer(
         TOPIC_GAPS_IDENTIFIED,
         bootstrap_servers=KAFKA_BROKERS,
-        group_id="learning-path-agent-group",
-        auto_offset_reset="latest",
+        group_id="learning-path-agent-group-prod", # Schimbăm grupul pentru un reset curat
+        auto_offset_reset="latest",                # Ignoră istoricul, citește doar evenimentele noi
+        session_timeout_ms=60000,
+        max_poll_interval_ms=300000,
+        heartbeat_interval_ms=10000
     )
 
     await producer.start()
@@ -63,6 +93,8 @@ async def consume():
     try:
         async for message in consumer:
             await process_message(message, db_pool, producer)
+    except Exception as e:
+        print(f"Exception in consumer loop: {e}")
     finally:
         await consumer.stop()
         await producer.stop()

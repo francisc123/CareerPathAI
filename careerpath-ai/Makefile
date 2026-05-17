@@ -66,6 +66,10 @@ test-flow1:
 	@echo "Executing E2E Integration Script for Flow 1..."
 	@bash tests/e2e/flow1_test.sh
 
+
+test-flow2:
+	@echo "Checking E2E prerequisites for Flow 2..."
+	@bash tests/e2e/flow2_test.sh
 # ─── Cleanup ───────────────────────────────────────────────────────────────────
 clean:
 	docker compose down -v --remove-orphans
