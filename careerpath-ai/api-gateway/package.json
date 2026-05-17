@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@fastify/http-proxy": "^11.4.4",
+    "@fastify/multipart": "^10.0.0",
     "@fastify/websocket": "^11.2.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
@@ -28,6 +29,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-fastify": "^11.1.21",
     "@nestjs/throttler": "^6.5.0",
+    "axios": "^1.16.1",
     "http-proxy-middleware": "^4.0.0",
     "jsonwebtoken": "^9.0.3",
     "nestjs-pino": "^4.6.1",
@@ -48,6 +50,7 @@
     "@types/http-proxy-middleware": "^0.19.3",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
     "@types/node": "^24.0.0",
     "@types/supertest": "^7.0.0",
     "@types/uuid": "^10.0.0",
