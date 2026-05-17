@@ -24,7 +24,8 @@ import json
 import logging
 from typing import Any, AsyncIterator, NamedTuple
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import redis.asyncio as redis
 
 from .config import GEMINI_API_KEY, REDIS_URL
@@ -44,46 +45,43 @@ MAX_PROBLEMS = 2
 MAX_HINTS_PER_PROBLEM = 3
 HISTORY_TTL_SECONDS = 60 * 60 * 2
 SESSION_TTL_SECONDS = 60 * 60 * 2
+GEMINI_MODEL = "gemini-2.5-flash"
 
-genai.configure(api_key=GEMINI_API_KEY)
+_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-def _model(kind: str, lang: str) -> "genai.GenerativeModel":
-    """
-    Lazily build per-(kind, lang) Gemini models, cached on the function.
-    `kind` is one of: chat, problem, eval, post.
-    """
-    cache = _model.__dict__.setdefault("_cache", {})
-    key = (kind, normalize_lang(lang))
-    if key in cache:
-        return cache[key]
+def _config(kind: str, lang: str) -> types.GenerateContentConfig:
+    """Build a GenerateContentConfig for one of: chat, problem, eval, post."""
+    lang = normalize_lang(lang)
     if kind == "chat":
-        m = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=get_system_prompt(lang),
-        )
-    elif kind == "problem":
-        m = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+        return types.GenerateContentConfig(system_instruction=get_system_prompt(lang))
+    if kind == "problem":
+        return types.GenerateContentConfig(
             system_instruction=get_problem_prompt(lang),
-            generation_config={"response_mime_type": "application/json"},
+            response_mime_type="application/json",
         )
-    elif kind == "eval":
-        m = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+    if kind == "eval":
+        return types.GenerateContentConfig(
             system_instruction=get_eval_prompt(lang),
-            generation_config={"response_mime_type": "application/json"},
+            response_mime_type="application/json",
         )
-    elif kind == "post":
-        m = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+    if kind == "post":
+        return types.GenerateContentConfig(
             system_instruction=get_post_prompt(lang),
-            generation_config={"response_mime_type": "application/json"},
+            response_mime_type="application/json",
         )
-    else:
-        raise ValueError(f"Unknown model kind: {kind}")
-    cache[key] = m
-    return m
+    raise ValueError(f"Unknown model kind: {kind}")
+
+
+def _history_to_contents(history: list[dict]) -> list[types.Content]:
+    """Convert persisted [{role, parts:[text]}] into google.genai Content objects."""
+    return [
+        types.Content(
+            role=item.get("role", "user"),
+            parts=[types.Part(text=p) for p in (item.get("parts") or [""])],
+        )
+        for item in history
+    ]
 
 _redis = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -163,7 +161,9 @@ async def pick_next_problem(
     )
 
     try:
-        response = await _model("problem", lang).generate_content_async(user_prompt)
+        response = await _client.aio.models.generate_content(
+            model=GEMINI_MODEL, contents=user_prompt, config=_config("problem", lang)
+        )
         problem = json.loads(response.text or "{}")
     except Exception:
         logger.exception("Problem selector failed for session %s.", session_id)
@@ -235,13 +235,14 @@ async def stream_ai_reply(
         else ""
     )
 
-    chat = _model("chat", lang).start_chat(history=history)
+    chat = _client.aio.chats.create(
+        model=GEMINI_MODEL,
+        config=_config("chat", lang),
+        history=_history_to_contents(history),
+    )
     full = ""
     try:
-        stream = await chat.send_message_async(
-            f"{user_message}{problem_anchor}", stream=True
-        )
-        async for chunk in stream:
+        async for chunk in await chat.send_message_stream(f"{user_message}{problem_anchor}"):
             text = chunk.text or ""
             if text:
                 full += text
@@ -316,7 +317,9 @@ async def grade_submission(
                 "hints_used": hints_used,
             }
         )
-        eval_response = await _model("eval", lang).generate_content_async(eval_input)
+        eval_response = await _client.aio.models.generate_content(
+            model=GEMINI_MODEL, contents=eval_input, config=_config("eval", lang)
+        )
         evaluation.update(json.loads(eval_response.text or "{}"))
     except Exception:
         logger.exception("Code eval failed for session %s.", session_id)
@@ -385,7 +388,9 @@ async def analyze_and_save(
     score: int | None = None
     feedback: str | None = None
     try:
-        response = await _model("post", lang).generate_content_async(transcript)
+        response = await _client.aio.models.generate_content(
+            model=GEMINI_MODEL, contents=transcript, config=_config("post", lang)
+        )
         analysis = json.loads(response.text or "{}")
         score = analysis.get("score")
         feedback = analysis.get("feedback")

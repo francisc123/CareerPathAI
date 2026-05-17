@@ -87,7 +87,7 @@ Each entry has severity, evidence (paste from logs), and proposed fix.
 ### 9. auth is mocked — no link to user-service
 - **Where**: `api-gateway/src/auth.controller.ts:30-41`. `register` and `login` just base64 the email and sign a JWT — there is no DB call, no password hashing, no duplicate check.
 - **Effect**: anyone can "register" the same email twice and get a different `userId` each time (since `userId = base64(email)` actually returns the same id deterministically — but no DB row is ever created). Downstream services may try to look up `users.id = userId` and find nothing.
-- **Fix**: proxy `/api/auth/register` and `/api/auth/login` to user-service:8001 instead of generating tokens locally. user-service is up and listening on 8001 today.
+- **Status**: **DEFERRED**. The proper fix is not "proxy to user-service" — user-service is wired for Keycloak (`@AuthenticationPrincipal Jwt jwt`, `oauth2ResourceServer.jwt()`), and Keycloak (cp-keycloak on :8484) is the real identity provider. Doing this right needs: a realm config, a frontend OIDC client, replacing the gateway's local sign with Keycloak token exchange. That's a multi-day refactor and was out of scope for this fix pass — kept the mock so dev flows still work.
 
 ### 10. job-match Qdrant client version incompatible with server
 - **Where**: `services/job-match-agent/requirements.txt` pulls `qdrant-client` (latest = 1.18) but server image is `qdrant:v1.10.0`.

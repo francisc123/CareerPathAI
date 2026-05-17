@@ -61,10 +61,8 @@ minio-init:
 
 # ─── E2E Testing ───────────────────────────────────────────────────────────────
 test-flow1:
-	@echo "Checking E2E prerequisites..."
-	@command -v jq >/dev/null 2>&1 || { echo >&2 "Error: 'jq' is required but not installed. Run: brew install jq"; exit 1; }
-	@echo "Executing E2E Integration Script for Flow 1..."
-	@bash tests/e2e/flow1_test.sh
+	@echo "Executing E2E Integration Test for Flow 1..."
+	@python tests/e2e/flow1_test.py
 
 # ─── Cleanup ───────────────────────────────────────────────────────────────────
 clean:

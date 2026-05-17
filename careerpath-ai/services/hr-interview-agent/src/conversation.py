@@ -2,7 +2,8 @@ import json
 import logging
 from typing import AsyncIterator, NamedTuple
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import redis.asyncio as redis
 
 from .config import GEMINI_API_KEY, REDIS_URL
@@ -18,34 +19,21 @@ logger = logging.getLogger(__name__)
 MAX_TURNS = 15
 HISTORY_TTL_SECONDS = 60 * 60  # 1 hour
 TURN_TTL_SECONDS = 60 * 60
+GEMINI_MODEL = "gemini-2.5-flash"
 
-genai.configure(api_key=GEMINI_API_KEY)
+_client = genai.Client(api_key=GEMINI_API_KEY)
 redis_client = redis.from_url(REDIS_URL)
 
-# Per-language model cache so we don't re-create models on every turn.
-_chat_models: dict[str, "genai.GenerativeModel"] = {}
-_analysis_models: dict[str, "genai.GenerativeModel"] = {}
+
+def _chat_config(lang: str) -> types.GenerateContentConfig:
+    return types.GenerateContentConfig(system_instruction=get_system_prompt(normalize_lang(lang)))
 
 
-def _get_chat_model(lang: str) -> "genai.GenerativeModel":
-    lang = normalize_lang(lang)
-    if lang not in _chat_models:
-        _chat_models[lang] = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=get_system_prompt(lang),
-        )
-    return _chat_models[lang]
-
-
-def _get_analysis_model(lang: str) -> "genai.GenerativeModel":
-    lang = normalize_lang(lang)
-    if lang not in _analysis_models:
-        _analysis_models[lang] = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=get_analysis_prompt(lang),
-            generation_config={"response_mime_type": "application/json"},
-        )
-    return _analysis_models[lang]
+def _analysis_config(lang: str) -> types.GenerateContentConfig:
+    return types.GenerateContentConfig(
+        system_instruction=get_analysis_prompt(normalize_lang(lang)),
+        response_mime_type="application/json",
+    )
 
 
 def _history_key(session_id: str) -> str:
@@ -105,12 +93,24 @@ async def stream_ai_response(
     Stream the model's reply for one user turn and persist the updated history.
     """
     history = await get_chat_history(session_id)
-    chat = _get_chat_model(lang).start_chat(history=history)
+    # History persisted as {"role": "user|model", "parts": ["text"]}; convert
+    # to google.genai Content/Part objects.
+    contents = [
+        types.Content(
+            role=item.get("role", "user"),
+            parts=[types.Part(text=p) for p in (item.get("parts") or [""])],
+        )
+        for item in history
+    ]
+    chat = _client.aio.chats.create(
+        model=GEMINI_MODEL,
+        config=_chat_config(lang),
+        history=contents,
+    )
     full_ai_response = ""
 
     try:
-        response_stream = await chat.send_message_async(user_message, stream=True)
-        async for chunk in response_stream:
+        async for chunk in await chat.send_message_stream(user_message):
             text = chunk.text or ""
             full_ai_response += text
             if text:
@@ -152,7 +152,11 @@ async def analyze_and_save_transcript(
     feedback: str | None = None
 
     try:
-        response = await _get_analysis_model(lang).generate_content_async(transcript)
+        response = await _client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=transcript,
+            config=_analysis_config(lang),
+        )
         analysis_result = json.loads(response.text or "{}")
         score = analysis_result.get("score")
         feedback = analysis_result.get("feedback")
