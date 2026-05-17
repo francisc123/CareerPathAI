@@ -19,6 +19,7 @@ from .publishers.interview_completed_publisher import (
     publish_interview_hr_completed,
     stop_producer,
 )
+from .retry import startup_retry  # noqa: F401  - utility decorator available to wrap startup tasks
 
 logger = logging.getLogger(__name__)
 

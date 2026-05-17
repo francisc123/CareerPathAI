@@ -12,6 +12,7 @@ from .database import (
     parse_module_id,
     save_quiz_attempt,
 )
+from .retry import startup_retry  # noqa: F401  - utility decorator available to wrap startup tasks
 
 logger = logging.getLogger(__name__)
 

@@ -28,7 +28,9 @@ async def process_message(message, db_pool, producer, dlq_producer) -> None:
         return
 
     user_id = data.get("user_id")
-    gaps = data.get("gaps")
+    # Accept either `gaps` (canonical) or `gaps_identified` (legacy from cv-analyzer);
+    # cv-analyzer publishes both, but be tolerant in case an older publisher reappears.
+    gaps = data.get("gaps") or data.get("gaps_identified")
     target_role = data.get("target_role")
 
     if not all([user_id, gaps, target_role]):
@@ -94,6 +96,11 @@ async def consume() -> None:
         group_id="learning-path-agent-group",
         auto_offset_reset="earliest",
         enable_auto_commit=False,
+        # Tolerate slow Gemini calls: bump session/poll timeouts so the
+        # broker doesn't kick us out mid-generation (from Francis's branch).
+        session_timeout_ms=60000,
+        max_poll_interval_ms=300000,
+        heartbeat_interval_ms=10000,
     )
 
     await producer.start()

@@ -10,6 +10,7 @@ from .chat_agent import chat
 from .consumers.runner import start_completion_consumers, stop_completion_consumers
 from .routers.monitoring import router as monitoring_router
 from prometheus_fastapi_instrumentator import Instrumentator
+from .retry import startup_retry
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,6 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
     _active_ws[user_id] = websocket
     logger.info(f"WebSocket connected: user={user_id}")
 
-    # Send typing indicator then initial greeting
     try:
         await websocket.send_json({"type": "typing"})
         greeting = await chat(user_id, "__init__")
@@ -105,7 +105,6 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
             if not user_message:
                 continue
 
-            # Signal typing
             await websocket.send_json({"type": "typing"})
 
             result = await chat(user_id, user_message)

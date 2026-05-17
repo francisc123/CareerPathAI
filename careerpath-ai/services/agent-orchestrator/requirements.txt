@@ -10,4 +10,4 @@ httpx
 prometheus-fastapi-instrumentator
 google-genai
 asyncpg
-tenacity
+tenacity>=8.2,<9
