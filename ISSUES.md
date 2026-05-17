@@ -145,3 +145,37 @@ Each entry has severity, evidence (paste from logs), and proposed fix.
 - ❌ learning-path & job-match endpoints return 404 because no workflow output exists for the user
 - ❌ notification-service email/push not testable (P0 #2)
 - ❌ job-scraper not running (P0 #3)
+
+---
+
+## Additional issues found while fixing
+
+### 17. [P1] job-scraper-service Dockerfile does NOT install requirements.txt
+- **Where**: `services/job-scraper-service/Dockerfile:8`
+  ```
+  RUN pip install --no-cache-dir fastapi==0.111.0 "uvicorn[standard]==0.30.1" pydantic==2.7.4
+  ```
+  Only 3 packages, despite `requirements.txt` listing 12 (redis, celery, playwright, aiokafka, …).
+- **Fix**: `RUN pip install --no-cache-dir -r requirements.txt` ✅ done.
+
+### 18. [P1] job-scraper-service: `from tasks import` (relative import broken in container)
+- **Where**: `services/job-scraper-service/src/main.py:7` does `from tasks import run_scraping_pipeline` — works only if `/app/src` is on PYTHONPATH. Inside the container, `python -m uvicorn src.main:app` puts `/app` (not `/app/src`) on PYTHONPATH.
+- **Fix**: change to `from .tasks import run_scraping_pipeline` (relative) or `from src.tasks import run_scraping_pipeline`.
+
+### 19. [P1] notification-service: SseController injected as dependency without being a provider
+- **Where**: `services/notification-service/src/app.module.ts:10` lists `SseController` only under `controllers:`, but `KafkaConsumerService` injects it via constructor.
+- **Symptom**: `Nest can't resolve dependencies of the KafkaConsumerService (HttpService, EmailService, ?). The argument at index 2 is missing.`
+- **Fix**: add `SseController` to `providers:` array so NestJS treats it as injectable (same singleton serves both the HTTP route and Kafka pushes). ✅ done.
+
+### 20. [P1] notification-service: VAPID setup crashes on placeholder keys
+- **Where**: `services/notification-service/src/email/email.service.ts:26-30` calls `setVapidDetails` with `'default_public_key'` fallback. `web-push` validates this and throws `Vapid public key should be 65 bytes long when decoded.` → entire service crash-loops.
+- **Fix**: skip `setVapidDetails` when env vars are not set; log a warning instead. Push won't work without real keys, but email + Kafka still start. ✅ done.
+
+### 21. [P2] learning-path-agent: external API keys not provided
+- **Symptom**: `your-youtube-data-api-key` literally passed as the key, returns 400 from YouTube and 403 from Udemy.
+- **Effect**: learning path is *generated* (Gemini works), but `resources[]` will be empty for each module.
+- **Fix**: document `YOUTUBE_DATA_API_KEY` and `UDEMY_CLIENT_ID`/`UDEMY_CLIENT_SECRET` in `.env.example`; have integration code degrade gracefully when missing (don't log spam).
+
+### 22. [P2] minio/mc:RELEASE.2024-07-16T03-15-26Z tag does not exist on Docker Hub
+- Caught while wiring up `minio-init`. Switched to `:latest`. ✅
+

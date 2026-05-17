@@ -310,7 +310,7 @@ services:
 
   # One-shot bucket creation. Exits 0 once buckets exist, so other services can wait on it.
   minio-init:
-    image: minio/mc:RELEASE.2024-07-16T03-15-26Z
+    image: minio/mc:latest
     container_name: cp-minio-init
     depends_on:
       minio: { condition: service_healthy }
