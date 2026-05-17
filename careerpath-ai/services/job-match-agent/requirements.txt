@@ -1,9 +1,10 @@
 fastapi
 uvicorn
 aiokafka
-qdrant-client
+qdrant-client>=1.10,<1.12
 google-genai
 python-dotenv
 pydantic
 asyncpg
+fastembed
 sqlalchemy

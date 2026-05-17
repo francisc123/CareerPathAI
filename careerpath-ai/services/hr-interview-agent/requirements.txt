@@ -1,8 +1,10 @@
 fastapi
 uvicorn
 websockets
-google-generativeai
+google-genai
 python-dotenv
 pydantic
 redis
 asyncpg
+aiokafka
+python-jose[cryptography]

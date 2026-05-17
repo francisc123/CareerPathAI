@@ -1,9 +1,20 @@
+import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from pydantic import BaseModel, Field
+from typing import List
 from .consumer import run_consumer_in_background
-from .database import get_db_pool, get_learning_path
-from .retry import startup_retry
+from .database import (
+    get_db_pool,
+    get_learning_path,
+    get_quiz_for_module,
+    parse_module_id,
+    save_quiz_attempt,
+)
+from .retry import startup_retry  # noqa: F401  - utility decorator available to wrap startup tasks
+
+logger = logging.getLogger(__name__)
 
 _db_pool = None
 
@@ -32,6 +43,44 @@ app.add_middleware(
 )
 
 
+# ---------- Pydantic models for the public quiz API ---------- #
+
+class QuizQuestionPublic(BaseModel):
+    """Quiz question as returned to the client — `correct_index` stripped."""
+    question: str
+    options: List[str]
+
+
+class QuizResponse(BaseModel):
+    module_id: str
+    module_title: str
+    questions: List[QuizQuestionPublic]
+
+
+class QuizSubmission(BaseModel):
+    answers: List[int] = Field(
+        ...,
+        description="One option index (0-based) per question, in question order.",
+    )
+
+
+class QuizResultItem(BaseModel):
+    correct: bool
+    correct_index: int
+
+
+class QuizSubmissionResult(BaseModel):
+    module_id: str
+    attempt_id: int
+    score: int = Field(..., description="Percentage 0-100")
+    correct: int
+    total: int
+    results: List[QuizResultItem]
+
+
+# ---------- Endpoints ---------- #
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
@@ -50,13 +99,85 @@ async def get_learning_path_endpoint(user_id: str):
     return result
 
 
-@app.get("/learning/quiz/{module_id}")
+@app.get("/learning/quiz/{module_id}", response_model=QuizResponse)
 async def get_quiz(module_id: str):
-    """Retrieves the quiz for a specific learning module. (Not yet implemented)"""
-    raise HTTPException(status_code=501, detail="Quiz feature not yet implemented")
+    """
+    Returns the quiz for a module without the `correct_index` field
+    (so the client cannot read the answers).
+    `module_id` format: `{user_id}__{week}__{module_idx}`.
+    """
+    if _db_pool is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    try:
+        parse_module_id(module_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    quiz_data = await get_quiz_for_module(_db_pool, module_id)
+    if quiz_data is None:
+        raise HTTPException(status_code=404, detail="Quiz not found for this module")
+
+    public_questions = [
+        QuizQuestionPublic(question=q["question"], options=q["options"])
+        for q in quiz_data["quiz"]
+    ]
+    return QuizResponse(
+        module_id=module_id,
+        module_title=quiz_data["module_title"],
+        questions=public_questions,
+    )
 
 
-@app.post("/learning/quiz/{module_id}/submit")
-async def submit_quiz(module_id: str, answers: dict):
-    """Submits user answers for a quiz. (Not yet implemented)"""
-    raise HTTPException(status_code=501, detail="Quiz feature not yet implemented")
+@app.post("/learning/quiz/{module_id}/submit", response_model=QuizSubmissionResult)
+async def submit_quiz(module_id: str, submission: QuizSubmission):
+    """
+    Scores the user's quiz submission, persists it, and returns per-question feedback.
+    """
+    if _db_pool is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    try:
+        user_id, _, _ = parse_module_id(module_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    quiz_data = await get_quiz_for_module(_db_pool, module_id)
+    if quiz_data is None:
+        raise HTTPException(status_code=404, detail="Quiz not found for this module")
+
+    quiz = quiz_data["quiz"]
+    if len(submission.answers) != len(quiz):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Expected {len(quiz)} answers, got {len(submission.answers)}",
+        )
+
+    results: List[QuizResultItem] = []
+    correct_count = 0
+    for question, user_answer in zip(quiz, submission.answers):
+        correct_index = int(question.get("correct_index", -1))
+        is_correct = user_answer == correct_index
+        if is_correct:
+            correct_count += 1
+        results.append(QuizResultItem(correct=is_correct, correct_index=correct_index))
+
+    total = len(quiz)
+    score_pct = round(100 * correct_count / total) if total else 0
+
+    try:
+        attempt_id = await save_quiz_attempt(
+            _db_pool, user_id, module_id, submission.answers, score_pct
+        )
+    except Exception:
+        logger.exception("Failed to persist quiz attempt for %s", module_id)
+        raise HTTPException(status_code=500, detail="Could not save quiz attempt")
+
+    return QuizSubmissionResult(
+        module_id=module_id,
+        attempt_id=attempt_id,
+        score=score_pct,
+        correct=correct_count,
+        total=total,
+        results=results,
+    )

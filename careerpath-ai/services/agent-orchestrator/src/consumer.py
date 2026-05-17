@@ -52,6 +52,13 @@ async def process_message(message, redis_client, producer):
 
         logging.info(f"Received CV analysis for user: {event.user_id}, Score: {event.score}")
 
+        # Keep the raw triggering event so monitoring API can replay it on /retry.
+        await redis_client.set(
+            f"workflow:{event.user_id}:last_event",
+            json.dumps(data),
+            ex=3600 * 24,
+        )
+
         initial_state = WorkflowState(
             user_id=event.user_id,
             cv_score=event.score,

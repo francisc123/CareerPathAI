@@ -18,7 +18,7 @@ async function bootstrap() {
   const fastifyInstance = app.getHttpAdapter().getInstance();
 
   // Încărcăm cheia publică pentru a valida token-ul JWT direct la nivel de proxy de rețea
-  const keyPath = process.env.JWT_PUBLIC_KEY_PATH || './keys/private.pem';
+  const keyPath = process.env.JWT_PUBLIC_KEY_PATH || './keys/public.pem';
   const publicKey = fs.existsSync(keyPath) ? fs.readFileSync(keyPath, 'utf8') : '';
 
   // PROXY NATIV PENTRU CV-SERVICE

@@ -116,9 +116,8 @@ logs-interview:
 
 # ─── E2E Testing ───────────────────────────────────────────────────────────────
 test-flow1:
-	@echo "Checking E2E prerequisites for Flow 1…"
-	@command -v jq >/dev/null 2>&1 || { echo >&2 "Error: 'jq' is required. Run: brew install jq"; exit 1; }
-	@bash tests/e2e/flow1_test.sh
+	@echo "Executing E2E Integration Test for Flow 1 (Python, cross-platform)..."
+	@python tests/e2e/flow1_test.py
 
 test-flow2:
 	@echo "Checking E2E prerequisites for Flow 2…"
@@ -159,6 +158,11 @@ k8s-apply:
 	kubectl apply -f k8s/ingress/
 	kubectl apply -f k8s/hpa/
 
+# ─── E2E tests ─────────────────────────────────────────────────────────────────
+test-flow3:
+	@echo "Running Flow 3 (HR + Tech interview) e2e test..."
+	@python tests/e2e/flow3_test.py
+
 help:
 	@echo "CareerPath AI — common commands"
 	@echo ""
@@ -166,6 +170,10 @@ help:
 	@echo "  make up               Build and start the full stack, then wait for health"
 	@echo "  make redpanda-topics  Create all Kafka topics (run once after first \`make up\`)"
 	@echo "  make smoke            Run both E2E flows end-to-end"
+	@echo ""
+	@echo "  make test-flow1       Run Flow 1 (CV upload → analyze → match) E2E test"
+	@echo "  make test-flow2       Run Flow 2 E2E test"
+	@echo "  make test-flow3       Run Flow 3 (HR + Tech interview) E2E test"
 	@echo ""
 	@echo "  make ps               Show service status with health"
 	@echo "  make logs             Tail all logs"
@@ -177,3 +185,4 @@ help:
 	@echo "  make clean-deep       Same as clean + delete project images (slow next \`make up\`)"
 	@echo ""
 	@echo "  make migrate          Re-apply schema to an existing DB (destructive)"
+	@echo "  make prod-up          Start in production mode"

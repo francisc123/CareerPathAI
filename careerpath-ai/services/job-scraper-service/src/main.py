@@ -4,9 +4,14 @@ import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
-from tasks import run_scraping_pipeline
+from src.tasks import run_scraping_pipeline
 
 app = FastAPI(title="Job Scraper Service")
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "job-scraper-service"}
 
 # Conexiunea la Redis pentru Rate Limiting
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))

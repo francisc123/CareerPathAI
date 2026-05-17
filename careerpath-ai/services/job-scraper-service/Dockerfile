@@ -5,7 +5,7 @@ RUN adduser --system --uid 1001 appuser
 
 FROM base AS production
 COPY requirements.txt .
-RUN pip install --no-cache-dir fastapi==0.111.0 "uvicorn[standard]==0.30.1" pydantic==2.7.4
+RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=appuser src ./src
 USER appuser
 EXPOSE 8003

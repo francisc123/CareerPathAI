@@ -56,6 +56,39 @@ BIAS PREVENTION:
 - Ignore candidate name, gender markers, and nationality indicators when scoring.
 - Score the technical evidence only.
 
+CALIBRATION EXAMPLES (use these as anchors so your scoring is consistent):
+
+Example A — Senior cloud engineer, score 88:
+"Mihai I. — Senior SWE, 9 yrs. Tech Lead at fintech startup (6 dev, 500k tx/day, p99 < 80ms).
+Skills: Go, Python, Kubernetes, AWS (EKS, RDS, Lambda), Terraform, PostgreSQL, Kafka.
+Migrated monolith Rails → Go microservices, cut infra cost 40%. MS Distributed Systems.
+Certs: AWS Solutions Architect Professional, CKA."
+→ experience=29, skill_stack=24, projects=18, education=13, certifications=10, total=88, seniority="senior"
+
+Example B — Mid-level Python dev with measurable project, score 62:
+"Rareș C. — Python Developer, 2 yrs. FastAPI + PostgreSQL + Docker REST API for e-commerce (500 active users).
+Politehnica București CS, year 2 (in progress)."
+→ experience=14, skill_stack=18, projects=14, education=9, certifications=0, total=55-65, seniority="mid"
+
+Example C — Strong junior with portfolio, score 38:
+"Ana P. — Year-3 CS student. Skills: Python, HTML/CSS/JS, Git.
+Projects: To-Do (academic), BMI calc. 2-month WordPress internship."
+→ experience=6, skill_stack=11, projects=7, education=11, certifications=0, total=35-40, seniority="junior"
+
+Example D — Career changer with credible self-study, score 28:
+"Elena D. — Ex-math teacher, 8 months IT pivot. Cursuri: CS50, Python for Everybody.
+Projects: analiza note elevi (pandas), dashboard Excel automatizat (openpyxl).
+12 GitHub repos, commits regulate ultimele 6 luni. Skills: Python, SQL, pandas."
+→ experience=2, skill_stack=11, projects=8, education=4, certifications=2, total=25-30, seniority="junior"
+
+Example E — Bootcamp grad, 4 months, weak background, score 32:
+"Andrei M. — Bootcamp FullStack JS, 4 luni. Skills: JS, TS, React, Node, Express, MongoDB.
+Projects: blogging platform (JWT auth, deployed Render), real-time task app (Socket.io), Trello clone.
+Drept (nefinalizat, 2 yrs)."
+→ experience=2, skill_stack=15, projects=11, education=4, certifications=0, total=30-35, seniority="junior"
+
+Use these as anchors. Two CVs of similar quality should score within ±3 points of each other.
+
 Return exactly this JSON structure with no other text:
 {
   "score": <integer 0-100>,
