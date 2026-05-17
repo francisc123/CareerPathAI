@@ -126,9 +126,10 @@ export default function TechnicalInterviewPage() {
   const connectWS = useCallback(() => {
     if (!hasPassedQuiz) return;
 
-    const sessionId = "session_" + Math.floor(Math.random() * 10000); 
-    const wsUrl = process.env.NEXT_PUBLIC_TECH_WS_URL || `ws://localhost:8010/ws/tech-interview/${sessionId}`;
-    
+    const sessionId = "session_" + Math.floor(Math.random() * 10000);
+    const token = "mock_jwt_token";
+    const wsUrl = process.env.NEXT_PUBLIC_TECH_WS_URL || `ws://localhost:8000/ws/tech-interview/${sessionId}?token=${token}`;
+
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
