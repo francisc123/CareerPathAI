@@ -15,23 +15,38 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 async def trigger_job_search(state: WorkflowState):
     """Node: Triggers the job scraping service via HTTP POST."""
     user_id = state["user_id"]
-    target_role = state["target_role"]
-    logging.info(f"Attempting to trigger job search for user {user_id} (Attempt {state['retry_count'] + 1})")
+    target_role = state.get("target_role", "")
+    skills = state.get("skills") or []
+    if not skills and target_role:
+        skills = [target_role]  # fallback: use target_role as a single-skill query
+    seniority = state.get("seniority") or "mid"
+    location = state.get("location") or "Romania"
+
+    logging.info(f"Attempting to trigger job search for user {user_id} (Attempt {state.get('retry_count', 0) + 1})")
 
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
                 f"{JOB_SCRAPER_URL}/scrape/trigger",
-                json={"user_id": user_id, "query": target_role},
-                timeout=10.0
+                json={
+                    "user_id": user_id,
+                    "skills": skills,
+                    "seniority": seniority,
+                    "location": location,
+                },
+                timeout=10.0,
             )
             response.raise_for_status()
             state["current_node"] = "job_search_triggered"
-            state["error"] = None # Clear error on success
+            state["error"] = None  # Clear error on success
         except httpx.RequestError as e:
             logging.warning(f"HTTP request to job scraper failed for user {user_id}: {e}")
             state["error"] = str(e)
-            state["retry_count"] += 1
+            state["retry_count"] = state.get("retry_count", 0) + 1
+        except httpx.HTTPStatusError as e:
+            logging.warning(f"Job scraper returned {e.response.status_code} for user {user_id}: {e.response.text}")
+            state["error"] = f"HTTP {e.response.status_code}: {e.response.text}"
+            state["retry_count"] = state.get("retry_count", 0) + 1
     return state
 
 async def trigger_learning_path(state: WorkflowState):

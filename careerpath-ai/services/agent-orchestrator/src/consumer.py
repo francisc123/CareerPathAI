@@ -48,6 +48,9 @@ async def process_message(message, redis_client, producer):
     """Processes a single Kafka message from cv.analyzed."""
     try:
         data = json.loads(message.value.decode("utf-8"))
+        # Map cv-analyzer field names (gaps_identified) to the orchestrator schema (gaps).
+        if "gaps_identified" in data and "gaps" not in data:
+            data["gaps"] = data["gaps_identified"]
         event = CvAnalyzedEvent(**data)
 
         logging.info(f"Received CV analysis for user: {event.user_id}, Score: {event.score}")
@@ -64,6 +67,8 @@ async def process_message(message, redis_client, producer):
             cv_score=event.score,
             gaps=event.gaps,
             target_role=event.target_role,
+            seniority=event.seniority,
+            skills=event.skills_extracted,
             retry_count=0,
         )
 

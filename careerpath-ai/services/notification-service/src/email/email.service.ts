@@ -37,10 +37,20 @@ export class EmailService implements OnModuleInit {
             this.logger.warn('VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY not set — Web Push disabled.');
         }
 
-        // Inițializare Redis client pentru subscripții push
-        this.redis = new Redis({
-            host: process.env.SPRING_DATA_REDIS_HOST || 'localhost',
-            port: 6379,
+        // Inițializare Redis client pentru subscripții push.
+        // Preferă REDIS_URL (folosit de restul serviciilor) și cade înapoi pe host/port/password individuale.
+        const redisUrl = process.env.REDIS_URL;
+        if (redisUrl) {
+            this.redis = new Redis(redisUrl);
+        } else {
+            this.redis = new Redis({
+                host: process.env.REDIS_HOST || 'redis',
+                port: parseInt(process.env.REDIS_PORT || '6379', 10),
+                password: process.env.REDIS_PASSWORD || undefined,
+            });
+        }
+        this.redis.on('error', (err) => {
+            this.logger.warn(`Redis connection error: ${err.message}`);
         });
     }
 

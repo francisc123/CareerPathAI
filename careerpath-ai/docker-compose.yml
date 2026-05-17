@@ -125,6 +125,7 @@ services:
     <<: *node-defaults
     depends_on:
       redpanda: { condition: service_healthy }
+      redis:    { condition: service_healthy }
     healthcheck:
       disable: true
     environment:
