@@ -9,5 +9,5 @@ pydantic
 httpx
 prometheus-fastapi-instrumentator
 google-genai
-asyncpg
+asyncpg>=0.29,<1
 tenacity>=8.2,<9

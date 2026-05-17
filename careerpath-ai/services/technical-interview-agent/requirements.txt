@@ -7,6 +7,6 @@ pydantic
 redis
 asyncpg
 aiokafka
-python-jose[cryptography]
+python-jose[cryptography]>=3.3,<4
 httpx
-tenacity
+tenacity>=8.2,<9
