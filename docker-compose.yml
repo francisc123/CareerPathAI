@@ -1,6 +1,9 @@
 x-springboot-svc: &springboot-svc
   networks:
     - internal-net
+  build:
+    context: ./services/user-service
+    dockerfile: Dockerfile
   environment:
     - SPRING_PROFILES_ACTIVE=docker
     - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/platformdb
@@ -19,7 +22,11 @@ x-springboot-svc: &springboot-svc
     redpanda: { condition: service_healthy }
 
 x-ai-agent: &ai-agent
-  <<: *springboot-svc
+  networks:
+    - internal-net
+  build:
+    context: ./services/cv-analyzer-agent
+    dockerfile: Dockerfile
   environment:
     - SPRING_PROFILES_ACTIVE=docker
     - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
@@ -35,7 +42,7 @@ networks:
     driver: bridge
   internal-net:
     driver: bridge
-    internal: false  # Modificat din true in false pentru a permite port mapping
+    internal: false
 
 volumes:
   postgres_data:
@@ -61,7 +68,7 @@ services:
     networks:
       - internal-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d platformdb"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d platformdb"]
       interval: 10s
       retries: 5
 
@@ -94,13 +101,10 @@ services:
       - --reserve-memory 0M
       - --node-id 0
       - --check=false
-      # Kafka API
       - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
-      # PandaProxy
       - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
       - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
-      # Schema Registry
       - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
       - --advertise-schema-registry-addr internal://redpanda:8081,external://localhost:18081
     ports:
@@ -156,35 +160,70 @@ services:
     ports: ["3000:3000"]
 
   # === MICROSERVICII CORE ===
-  user-service: { <<: *springboot-svc, image: careerpath/user-service:latest }
+  user-service:
+    <<: *springboot-svc
+    build: ./services/user-service
+
   cv-service:
     <<: *springboot-svc
-    image: careerpath/cv-service:latest
+    build: ./services/cv-service
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
-  job-scraper-service: { <<: *springboot-svc, image: careerpath/job-scraper:latest }
-  notification-service: { <<: *springboot-svc, image: careerpath/notifications:latest }
+
+  job-scraper-service:
+    <<: *springboot-svc
+    build: ./services/job-scraper-service
+
+  notification-service:
+    <<: *springboot-svc
+    build: ./services/notification-service
+    healthcheck:
+      test: ["NONE"]
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      - SPRING_DATA_REDIS_HOST=redis
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_USER=
+      - SMTP_PASS=
+      - EMAIL_FROM=no-reply@careerpathai.com
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
 
   # === AGENTI AI ===
-  cv-analyzer-agent: { <<: *ai-agent, image: careerpath/cv-analyzer:latest }
-  learning-path-agent: { <<: *ai-agent, image: careerpath/learning-path:latest }
-  job-match-agent: { <<: *ai-agent, image: careerpath/job-match:latest }
-  hr-interview-agent: { <<: *ai-agent, image: careerpath/hr-interview:latest }
-  technical-interview-agent: { <<: *ai-agent, image: careerpath/tech-interview:latest }
+  cv-analyzer-agent:
+    <<: *ai-agent
+    build: ./services/cv-analyzer-agent
+
+  learning-path-agent:
+    <<: *ai-agent
+    build: ./services/learning-path-agent
+
+  job-match-agent:
+    <<: *ai-agent
+    build: ./services/job-match-agent
+
+  hr-interview-agent:
+    <<: *ai-agent
+    build: ./services/hr-interview-agent
+
+  technical-interview-agent:
+    <<: *ai-agent
+    build: ./services/technical-interview-agent
 
   agent-orchestrator:
     <<: *springboot-svc
-    image: careerpath/orchestrator:latest
+    build: ./services/agent-orchestrator
     depends_on:
       cv-analyzer-agent: { condition: service_healthy }
       learning-path-agent: { condition: service_healthy }
 
   # === GATEWAY & FRONTEND ===
-  #
   api-gateway:
     <<: *springboot-svc
-    image: careerpath/api-gateway:latest
+    build: ./services/api-gateway
     networks: [public-net, internal-net]
     ports: ["80:8080"]
     depends_on:
