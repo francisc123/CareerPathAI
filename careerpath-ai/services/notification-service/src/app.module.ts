@@ -7,6 +7,9 @@ import { KafkaConsumerService } from './kafka-consumer/kafka-consumer.service';
 @Module({
   imports: [HttpModule],
   controllers: [SseController], // SseController este controller-ul HTTP real
-  providers: [EmailService, KafkaConsumerService], // KafkaConsumerService consumă în fundal
+  // SseController is exposed as a provider too so KafkaConsumerService can
+  // inject it and call pushNotification(). Same singleton instance handles
+  // both the HTTP /sse/:userId route and incoming Kafka-driven pushes.
+  providers: [EmailService, KafkaConsumerService, SseController],
 })
 export class AppModule {}

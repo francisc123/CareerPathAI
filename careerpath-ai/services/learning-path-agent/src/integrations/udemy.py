@@ -32,8 +32,14 @@ _CLIENT_ID = os.getenv("UDEMY_CLIENT_ID")
 _CLIENT_SECRET = os.getenv("UDEMY_CLIENT_SECRET")
 
 
+def _is_placeholder(v: str | None) -> bool:
+    return bool(v) and v.startswith(("your-", "YOUR-", "REPLACE_ME", "changeme"))
+
+
 def _auth_header() -> dict[str, str] | None:
     if not (_CLIENT_ID and _CLIENT_SECRET):
+        return None
+    if _is_placeholder(_CLIENT_ID) or _is_placeholder(_CLIENT_SECRET):
         return None
     token = base64.b64encode(f"{_CLIENT_ID}:{_CLIENT_SECRET}".encode()).decode()
     return {

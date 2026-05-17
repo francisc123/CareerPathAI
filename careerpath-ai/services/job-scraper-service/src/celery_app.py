@@ -7,7 +7,7 @@ celery_app = Celery(
     "job_scraper",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=['tasks']
+    include=['src.tasks']
 )
 
 celery_app.conf.update(

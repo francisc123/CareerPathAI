@@ -74,6 +74,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="CV Service")
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "cv-service"}
+
 # Endpoints
 @app.post("/upload")
 async def upload_cv(
@@ -161,7 +165,7 @@ async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
     if job.status == "completed":
         try:
             score_result = await db.execute(
-                text("SELECT score FROM cv_analysis_results WHERE user_id = :uid ORDER BY id DESC LIMIT 1"),
+                text("SELECT score FROM cv_analysis_results WHERE user_id = :uid ORDER BY analyzed_at DESC LIMIT 1"),
                 {"uid": job.user_id}
             )
             score_row = score_result.fetchone()
@@ -169,6 +173,9 @@ async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
                 score = score_row[0]
         except Exception as e:
             print(f"Eroare la citirea scorului din baza de date: {e}")
+            # Also fall back to cv_uploads.score which the analyzer writes directly.
+            if job.status == "completed" and hasattr(job, "score") and getattr(job, "score", None):
+                score = job.score
 
     return {
         "job_id": job.id,

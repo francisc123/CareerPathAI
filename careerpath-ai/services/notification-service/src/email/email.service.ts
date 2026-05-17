@@ -22,12 +22,20 @@ export class EmailService implements OnModuleInit {
             },
         });
 
-        // Inițializare Web Push chei VAPID
-        webpush.setVapidDetails(
-            'mailto:admin@careerpathai.com',
-            process.env.VAPID_PUBLIC_KEY || 'default_public_key',
-            process.env.VAPID_PRIVATE_KEY || 'default_private_key'
-        );
+        // Web Push: only configure if real VAPID keys are provided. Otherwise
+        // skip — Push notifications won't work, but the rest of the service
+        // (email, kafka) still starts.
+        const vapidPub = process.env.VAPID_PUBLIC_KEY;
+        const vapidPriv = process.env.VAPID_PRIVATE_KEY;
+        if (vapidPub && vapidPriv) {
+            try {
+                webpush.setVapidDetails('mailto:admin@careerpathai.com', vapidPub, vapidPriv);
+            } catch (err) {
+                this.logger.warn(`VAPID setup failed (push disabled): ${(err as Error).message}`);
+            }
+        } else {
+            this.logger.warn('VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY not set — Web Push disabled.');
+        }
 
         // Inițializare Redis client pentru subscripții push
         this.redis = new Redis({

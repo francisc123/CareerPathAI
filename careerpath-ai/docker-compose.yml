@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─────────────────────────────────────────────────────────────────────────────
 #  CareerPath AI — Docker Compose (Development Unificat)
 #
@@ -309,6 +307,42 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
     restart: unless-stopped
+
+  # One-shot bucket creation. Exits 0 once buckets exist, so other services can wait on it.
+  minio-init:
+    image: minio/mc:latest
+    container_name: cp-minio-init
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-change_me_minio}
+    volumes:
+      - ./infrastructure/minio/init-buckets.sh:/init-buckets.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["mc alias set local http://minio:9000 \"$$MINIO_ACCESS_KEY\" \"$$MINIO_SECRET_KEY\" && mc mb --ignore-existing local/cvs-raw && mc mb --ignore-existing local/cvs-processed && mc mb --ignore-existing local/course-materials && echo 'MinIO buckets ready.'"]
+    networks: [internal-net]
+    restart: "no"
+
+  # One-shot Qdrant collection setup
+  qdrant-init:
+    image: curlimages/curl:8.10.1
+    container_name: cp-qdrant-init
+    depends_on:
+      qdrant: { condition: service_started }
+    networks: [internal-net]
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until curl -sf http://qdrant:6333/readyz >/dev/null; do sleep 1; done
+        for c in cv_embeddings job_embeddings course_embeddings; do
+          curl -sf -X PUT "http://qdrant:6333/collections/$$c" \
+            -H 'Content-Type: application/json' \
+            -d '{"vectors":{"size":3072,"distance":"Cosine"}}' \
+            || echo "Collection $$c may already exist"
+        done
+        echo "Qdrant collections ready."
 
   # ── Layer 6 · Observability ────────────────────────────────────────────────
   otel-collector:

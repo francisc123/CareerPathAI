@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://www.googleapis.com/youtube/v3/search"
 _TIMEOUT = httpx.Timeout(10.0)
 _API_KEY = os.getenv("YOUTUBE_API_KEY")
+# Treat the .env.example placeholder as "unset" so we don't spam the API with
+# guaranteed-400s. Anything starting with "your-" or "REPLACE_ME" is a stub.
+_PLACEHOLDER = bool(_API_KEY) and (
+    _API_KEY.startswith(("your-", "YOUR-", "REPLACE_ME", "changeme"))
+)
 
 
 async def search_videos(query: str, *, max_results: int = 3) -> list[dict[str, Any]]:
@@ -36,8 +41,8 @@ async def search_videos(query: str, *, max_results: int = 3) -> list[dict[str, A
     Returns Resource-shaped dicts:
       [{"type": "video", "title": ..., "url": "https://youtu.be/..."}, ...]
     """
-    if not _API_KEY:
-        logger.info("YOUTUBE_API_KEY unset — YouTube lookup skipped for '%s'.", query)
+    if not _API_KEY or _PLACEHOLDER:
+        logger.info("YOUTUBE_API_KEY unset/placeholder — YouTube lookup skipped.")
         return []
 
     params = {
