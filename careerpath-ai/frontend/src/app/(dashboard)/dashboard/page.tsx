@@ -89,15 +89,17 @@ export default function DashboardPage() {
   if (!isLoaded) return null; 
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto space-y-10 animate-in fade-in duration-700 pb-24">
+    <div className="w-full max-w-[1440px] mx-auto space-y-10 animate-in fade-in duration-700 pb-24">
       
-      {/* --- HEADER --- */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-indigo-400">
-           <Sparkles size={14} className="fill-current" />
-           <span className="text-[10px] font-black uppercase tracking-[0.3em]">Identity Hub</span>
+      {/* --- CHENAR DESIGN TITLU UNIFICAT --- */}
+      <div className="flex justify-between items-center bg-[#0b0f1a]/60 border border-white/5 p-5 rounded-[24px] shadow-lg backdrop-blur-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-indigo-400 mb-1">
+             <Sparkles size={16} className="fill-current" />
+             <span className="text-[10px] font-black uppercase tracking-[0.3em]">Identity Hub</span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-white uppercase leading-none">Your Professional Profile</h1>
         </div>
-        <h1 className="text-3xl font-black tracking-tight text-white uppercase">Your Professional Profile</h1>
       </div>
 
       {/* --- MAIN GRID (7 / 5) --- */}
@@ -199,7 +201,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Footer - Perfect integrat jos */}
+          {/* Footer */}
           <div className="px-8 py-5 bg-[#0b0f1a] border-t border-white/[0.06] rounded-b-[40px] flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_#6366f1]" />
@@ -229,25 +231,23 @@ export default function DashboardPage() {
         </div>
 
         {/* === RIGHT COLUMN: AI COPILOT CHAT (5 Cols) === */}
-        {/* MODIFICARE AICI: Am schimbat h-[840px] in h-[600px] */}
-        <div className="xl:col-span-5 h-[500px] flex flex-col bg-[#0b0f1a]/90 border border-white/[0.06] rounded-[40px] shadow-[0_0_80px_rgba(0,0,0,0.3)] backdrop-blur-xl overflow-hidden relative">
+        {/* CORECTAT ACUM: Integrat design-ul 100% identic de pe Home Page */}
+        <div className="xl:col-span-5 h-[500px] flex flex-col bg-[#0b0f1a]/60 border border-white/10 backdrop-blur-3xl rounded-[40px] overflow-hidden shadow-2xl border-t border-l border-white/20 relative">
           
-          <div className="px-8 py-6 border-b border-white/[0.06] bg-white/[0.01] flex items-center justify-between shrink-0">
+          <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.01] shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[14px] bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-                <Sparkles size={16} className="text-indigo-400" />
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shadow-inner">
+                <Sparkles size={14} />
               </div>
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-widest text-white leading-none">AI Copilot</h3>
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" />
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Online & Ready</span>
-                </div>
-              </div>
+              <span className="text-xs font-black tracking-widest uppercase text-slate-200">AI Assistant</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" />
+               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">LIVE</span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden min-h-0">
              <ChatPanel />
           </div>
         </div>

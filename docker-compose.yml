@@ -1,97 +1,247 @@
-x-springboot-svc: &springboot-svc
-  networks:
-    - internal-net
-  build:
-    context: ./services/user-service
-    dockerfile: Dockerfile
-  environment:
-    - SPRING_PROFILES_ACTIVE=docker
-    - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/platformdb
-    - SPRING_DATA_REDIS_HOST=redis
-    - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
-    - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health
-  healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-    interval: 20s
-    timeout: 5s
-    retries: 5
-    start_period: 40s
-  depends_on:
-    postgres: { condition: service_healthy }
-    redis: { condition: service_healthy }
-    redpanda: { condition: service_healthy }
+version: "3.9"
 
-x-ai-agent: &ai-agent
-  networks:
-    - internal-net
-  build:
-    context: ./services/cv-analyzer-agent
-    dockerfile: Dockerfile
-  environment:
-    - SPRING_PROFILES_ACTIVE=docker
-    - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
-    - QDRANT_URL=http://qdrant:6333
-    - GEMINI_API_KEY=${GEMINI_API_KEY}
-    - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health
+# ─────────────────────────────────────────────────────────────────────────────
+#  CareerPath AI — Docker Compose (Development Unificat)
+#
+#  PROFILES — porneste doar ce ai nevoie:
+#  Agenti AI:           docker-compose --profile agents up
+#  Backend:             docker-compose --profile backend up
+#  Frontend:            docker-compose --profile frontend --profile backend up
+#  Observabilitate:     docker-compose --profile observability up
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-python-ai: &python-ai-defaults
+  restart: unless-stopped
+  env_file: .env
+  networks: [internal-net]
   depends_on:
-    redpanda: { condition: service_healthy }
-    qdrant: { condition: service_healthy }
+    postgres:   { condition: service_healthy }
+    redis:      { condition: service_healthy }
+    redpanda:   { condition: service_healthy }
+
+x-node-svc: &node-defaults
+  restart: unless-stopped
+  env_file: .env
+  networks: [internal-net]
 
 networks:
   public-net:
     driver: bridge
   internal-net:
     driver: bridge
-    internal: false
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
-  redpanda_data:
   minio_data:
-  prometheus_data:
-  grafana_data:
+  redpanda_data:
 
+# ─────────────────────────────────────────────────────────────────────────────
 services:
-  # === INFRASTRUCTURA ===
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: platformdb
+
+  # ── Layer 1 · Frontend ─────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: cp-frontend
+    ports: ["3000:3000"]
+    env_file: .env
+    networks: [public-net]
+    depends_on: [api-gateway]
+    restart: unless-stopped
+    profiles: [frontend]
+
+  # ── Layer 2 · API Gateway ──────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+      target: production
+    container_name: api-gateway-1
+    networks:
+      - public-net
+      - internal-net
     ports:
-      - "5432:5432"
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - JWT_PUBLIC_KEY_PATH=/app/keys/public.pem
+    volumes:
+      - ./keys:/app/keys:ro
+
+  # ── Layer 3 · Core Services ────────────────────────────────────────────────
+  user-service:
+    build: ./services/user-service
+    container_name: cp-user-service
+    ports: ["8001:8001"]
+    <<: *node-defaults
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    profiles: [backend, frontend]
+
+  cv-service:
+    build:
+      context: .
+      dockerfile: services/cv-service/Dockerfile
+    container_name: cp-cv-service
+    ports: ["8002:8002"]
+    environment:
+      - PYTHONPATH=/app:/app/src:/
+    <<: *python-ai-defaults
+    depends_on:
+      postgres:  { condition: service_healthy }
+      minio:     { condition: service_started }
+      redpanda:  { condition: service_healthy }
+    profiles: [backend]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.0
+    container_name: cp-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_PROXY: "none"
+    ports:
+      - "8484:8080"
+    networks:
+      - public-net
+      - internal-net
+    restart: unless-stopped
+
+  job-scraper-service:
+    build: ./services/job-scraper-service
+    container_name: cp-job-scraper
+    ports: ["8003:8003"]
+    <<: *python-ai-defaults
+    profiles: [backend]
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: cp-notification
+    ports: ["8004:8004"]
+    <<: *node-defaults
+    depends_on:
+      redpanda: { condition: service_healthy }
+    healthcheck: disable
+    environment:
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - EMAIL_FROM=no-reply@careerpathai.com
+    profiles: [backend]
+
+  # ── Layer 4 · AI Agent Services ───────────────────────────────────────────
+  agent-orchestrator:
+    build: ./services/agent-orchestrator
+    container_name: cp-orchestrator
+    ports: ["8005:8005"]
+    <<: *python-ai-defaults
+    profiles: [agents]
+
+  cv-analyzer-agent:
+    build: ./services/cv-analyzer-agent
+    container_name: cp-cv-analyzer
+    ports: ["8006:8006"]
+    <<: *python-ai-defaults
+    depends_on:
+      qdrant:   { condition: service_started }
+    profiles: [agents]
+
+  learning-path-agent:
+    build: ./services/learning-path-agent
+    container_name: cp-learning-agent
+    ports: ["8007:8007"]
+    <<: *python-ai-defaults
+    profiles: [agents]
+
+  job-match-agent:
+    build: ./services/job-match-agent
+    container_name: cp-job-match
+    ports: ["8008:8008"]
+    <<: *python-ai-defaults
+    depends_on:
+      qdrant:   { condition: service_started }
+    profiles: [agents]
+
+  hr-interview-agent:
+    build: ./services/hr-interview-agent
+    container_name: cp-hr-agent
+    ports: ["8009:8009"]
+    <<: *python-ai-defaults
+    profiles: [agents]
+
+  technical-interview-agent:
+    build: ./services/technical-interview-agent
+    container_name: cp-tech-agent
+    ports: ["8010:8010"]
+    <<: *python-ai-defaults
+    profiles: [agents]
+
+  # ── Layer 5 · Infrastructure (Fara profile — porneste mereu) ──────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cp-postgres
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-careerpath}
+      POSTGRES_USER:     ${POSTGRES_USER:-cp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [internal-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cp_user} -d ${POSTGRES_DB:-careerpath}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: cp-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - internal-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d platformdb"]
-      interval: 10s
-      retries: 5
 
   redis:
     image: redis:7-alpine
-    volumes: [redis_data:/data]
-    networks: [internal-net]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    container_name: cp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - internal-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
+      retries: 5
 
   qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-    volumes: [qdrant_data:/qdrant/storage]
+    image: qdrant/qdrant:v1.10.0
+    container_name: cp-qdrant
+    ports: ["6333:6333", "6334:6334"]
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./infrastructure/qdrant/config.yaml:/qdrant/config/production.yaml:ro
     networks: [internal-net]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
       interval: 10s
+    restart: unless-stopped
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: cp-redpanda
     command:
       - redpanda
       - start
@@ -106,7 +256,6 @@ services:
       - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
       - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
       - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
-      - --advertise-schema-registry-addr internal://redpanda:8081,external://localhost:18081
     ports:
       - "19092:19092"
       - "18082:18082"
@@ -123,115 +272,88 @@ services:
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:latest
+    container_name: cp-redpanda-console
     volumes:
       - ./infrastructure/redpanda/console-config.yaml:/etc/redpanda/admin-config.yaml
     environment:
       CONFIG_FILEPATH: /etc/redpanda/admin-config.yaml
-    networks: [ public-net, internal-net ]
-    ports: [ "8080:8080" ]
-    depends_on: { redpanda: { condition: service_healthy } }
+    ports:
+      - "8080:8080"
+    networks:
+      - public-net
+      - internal-net
+    depends_on:
+      redpanda: { condition: service_healthy }
 
   minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    container_name: cp-minio
+    ports: ["9000:9000", "9001:9001"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes: [minio_data:/data]
+      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-change_me_minio}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
     networks: [internal-net]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
+    restart: unless-stopped
 
-  # === OBSERVABILITATE ===
+  # ── Layer 6 · Observability ────────────────────────────────────────────────
   otel-collector:
-    image: otel/opentelemetry-collector:latest
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    container_name: cp-otel-collector
+    volumes:
+      - ./observability/otel/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports: ["4317:4317", "4318:4318"]
     networks: [internal-net]
+    restart: unless-stopped
+    profiles: [observability]
 
   prometheus:
-    image: prom/prometheus:latest
-    volumes: [prometheus_data:/prometheus]
+    image: prom/prometheus:v2.53.0
+    container_name: cp-prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks: [internal-net]
+    restart: unless-stopped
+    profiles: [observability]
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: cp-loki
+    ports: ["3100:3100"]
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+    networks: [internal-net]
+    restart: unless-stopped
+    profiles: [observability]
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: cp-tempo
+    ports: ["3200:3200"]
+    volumes:
+      - ./observability/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
+    networks: [internal-net]
+    restart: unless-stopped
+    profiles: [observability]
 
   grafana:
-    image: grafana/grafana:latest
-    volumes: [grafana_data:/var/lib/grafana]
-    networks: [public-net, internal-net]
-    ports: ["3000:3000"]
-
-  # === MICROSERVICII CORE ===
-  user-service:
-    <<: *springboot-svc
-    build: ./services/user-service
-
-  cv-service:
-    <<: *springboot-svc
-    build: ./services/cv-service
-    depends_on:
-      postgres: { condition: service_healthy }
-      minio: { condition: service_healthy }
-
-  job-scraper-service:
-    <<: *springboot-svc
-    build: ./services/job-scraper-service
-
-  notification-service:
-    <<: *springboot-svc
-    build: ./services/notification-service
-    healthcheck:
-      test: ["NONE"]
+    image: grafana/grafana:11.1.0
+    container_name: cp-grafana
+    ports: ["3001:3000"]
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
-      - SPRING_DATA_REDIS_HOST=redis
-      - SMTP_HOST=mailhog
-      - SMTP_PORT=1025
-      - SMTP_USER=
-      - SMTP_PASS=
-      - EMAIL_FROM=no-reply@careerpathai.com
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-
-  # === AGENTI AI ===
-  cv-analyzer-agent:
-    <<: *ai-agent
-    build: ./services/cv-analyzer-agent
-
-  learning-path-agent:
-    <<: *ai-agent
-    build: ./services/learning-path-agent
-
-  job-match-agent:
-    <<: *ai-agent
-    build: ./services/job-match-agent
-
-  hr-interview-agent:
-    <<: *ai-agent
-    build: ./services/hr-interview-agent
-
-  technical-interview-agent:
-    <<: *ai-agent
-    build: ./services/technical-interview-agent
-
-  agent-orchestrator:
-    <<: *springboot-svc
-    build: ./services/agent-orchestrator
-    depends_on:
-      cv-analyzer-agent: { condition: service_healthy }
-      learning-path-agent: { condition: service_healthy }
-
-  # === GATEWAY & FRONTEND ===
-  api-gateway:
-    <<: *springboot-svc
-    build: ./services/api-gateway
-    networks: [public-net, internal-net]
-    ports: ["80:8080"]
-    depends_on:
-      user-service: { condition: service_healthy }
-      agent-orchestrator: { condition: service_healthy }
-
-  frontend:
-    image: nginx:alpine
-    networks: [public-net]
-    ports: ["8081:80"]
-    depends_on: { api-gateway: { condition: service_healthy } }
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus, loki, tempo]
+    networks: [internal-net]
+    restart: unless-stopped
+    profiles: [observability]
