@@ -84,6 +84,11 @@ k8s-apply:
 	kubectl apply -f k8s/ingress/
 	kubectl apply -f k8s/hpa/
 
+# ─── E2E tests ─────────────────────────────────────────────────────────────────
+test-flow3:
+	@echo "Running Flow 3 (HR + Tech interview) e2e test..."
+	@python tests/e2e/flow3_test.py
+
 help:
 	@echo "Available commands:"
 	@echo "  make up           - Start all services"
@@ -95,3 +100,4 @@ help:
 	@echo "  make test-flow1   - Run Flow 1 E2E Integration Test"
 	@echo "  make clean        - Remove all containers and volumes"
 	@echo "  make prod-up      - Start in production mode"
+	@echo "  make test-flow3   - Run Flow 3 (HR + Tech interview) e2e test"

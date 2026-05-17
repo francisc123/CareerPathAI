@@ -6,6 +6,7 @@ from aiokafka import AIOKafkaProducer
 from langgraph.graph import StateGraph, END, START
 from .state import WorkflowState
 from .config import KAFKA_BROKERS, TOPIC_GAPS_IDENTIFIED, JOB_SCRAPER_URL
+from .smart_router import decide_route
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -66,13 +67,37 @@ async def handle_failure(state: WorkflowState):
 
 # --- Conditional Edges ---
 
-def route_flow(state: WorkflowState):
-    """Conditional edge: Routes based on the CV score."""
+async def route_flow(state: WorkflowState):
+    """
+    Conditional edge — picks the next node using an LLM router that considers
+    CV score, gaps, AND target_role. Falls back to the legacy binary rule on
+    any LLM error.
+
+    Mapping from `decide_route` outputs to graph nodes:
+      job_search        → trigger_job_search
+      learning_path     → trigger_learning_path
+      hybrid            → trigger_learning_path  (we run learning first, jobs
+                                                   resume after via Flow 2 wiring)
+      recommend_pivot   → trigger_learning_path  (gentler than blocking the user;
+                                                   plan will re-target naturally)
+    """
     score = state.get("cv_score", 0)
-    if score >= 70:
+    gaps = state.get("gaps", []) or []
+    target_role = state.get("target_role", "") or ""
+
+    route, reason = await decide_route(
+        score=score, gaps=gaps, target_role=target_role
+    )
+    state["route_decision"] = route
+    state["route_reason"] = reason
+    logging.info(
+        "Smart router → %s (score=%s, target=%s, reason=%s)",
+        route, score, target_role, reason,
+    )
+
+    if route == "job_search":
         return "trigger_job_search"
-    else:
-        return "trigger_learning_path"
+    return "trigger_learning_path"
 
 def check_job_search_status(state: WorkflowState):
     """Conditional edge: Checks if the job search trigger was successful."""

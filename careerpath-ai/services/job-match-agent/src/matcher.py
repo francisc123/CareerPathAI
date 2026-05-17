@@ -13,8 +13,8 @@ from .prompts import (
     RERANK_SYSTEM_PROMPT, get_rerank_user_prompt,
     COVER_LETTER_SYSTEM_PROMPT, get_cover_letter_user_prompt
 )
-
 from .qdrant_service import get_cv_details, find_similar_jobs
+from .reranker import rerank_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,13 @@ async def find_and_match_jobs(user_id: str, cv_text: str, qdrant: AsyncQdrantCli
         return []
 
     candidate_jobs = await find_similar_jobs(cv_vector, seniority, qdrant, limit=50)
-    logger.info("Found %d candidate jobs from vector search.", len(candidate_jobs))
+    logger.info("Found %d candidate jobs from Qdrant ANN.", len(candidate_jobs))
+
+    # Stage 2: cross-encoder rerank narrows 50 → 10 with much higher precision
+    # than ANN. The LLM call below then only has to reason over 10 jobs, not 50,
+    # which is both cheaper and lets it give better explanations.
+    candidate_jobs = rerank_candidates(cv_text, candidate_jobs, top_n=10)
+    logger.info("Cross-encoder kept %d candidates for LLM rerank.", len(candidate_jobs))
 
     ranked_jobs = await rerank_jobs_with_llm(cv_text, candidate_jobs)
     logger.info("Re-ranked down to %d final job matches.", len(ranked_jobs))

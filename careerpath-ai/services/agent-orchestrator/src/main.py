@@ -7,6 +7,8 @@ import logging
 from .consumer import run_consumer_in_background
 from .config import REDIS_URL
 from .chat_agent import chat
+from .consumers.runner import start_completion_consumers, stop_completion_consumers
+from .routers.monitoring import router as monitoring_router
 from prometheus_fastapi_instrumentator import Instrumentator
 
 logger = logging.getLogger(__name__)
@@ -20,8 +22,12 @@ _active_ws: dict[str, WebSocket] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_consumer_in_background()
-    yield
-    await redis_client.aclose()
+    await start_completion_consumers()
+    try:
+        yield
+    finally:
+        await stop_completion_consumers()
+        await redis_client.aclose()
 
 
 app = FastAPI(
@@ -38,6 +44,7 @@ app.add_middleware(
 )
 
 Instrumentator().instrument(app).expose(app)
+app.include_router(monitoring_router)
 
 
 @app.get("/health")
@@ -47,10 +54,17 @@ async def health_check():
 
 @app.get("/workflow/{user_id}/status")
 async def get_workflow_status(user_id: str):
+    """Lightweight polling endpoint — returns only `current_node` + retry_count."""
     state_json = await redis_client.get(f"workflow:{user_id}")
     if not state_json:
         raise HTTPException(status_code=404, detail="Workflow state not found for this user.")
-    return json.loads(state_json)
+    state = json.loads(state_json)
+    return {
+        "user_id": user_id,
+        "current_node": state.get("current_node"),
+        "retry_count": state.get("retry_count", 0),
+        "error": state.get("error"),
+    }
 
 
 @app.get("/profile/{user_id}")

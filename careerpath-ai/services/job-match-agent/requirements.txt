@@ -6,4 +6,5 @@ google-genai
 python-dotenv
 pydantic
 asyncpg
+fastembed
 sqlalchemy
