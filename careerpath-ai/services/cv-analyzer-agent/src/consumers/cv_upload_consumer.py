@@ -10,12 +10,17 @@ from src.agents.cv_analyzer import process_cv_pipeline
 from src.db.cv_repository import save_cv_analysis, update_cv_upload_result
 from src.publishers.cv_analyzed_publisher import publish_cv_analyzed_event
 
+from sqlalchemy import create_engine, text
+
 logger = logging.getLogger(__name__)
 
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "redpanda:9092")
 KAFKA_TOPIC = "cv.uploaded"
 KAFKA_GROUP_ID = "cv-analyzer-agent"
 
+# Ne asigurăm că folosim driver-ul standard (psycopg2) pentru conexiunea sincronă de fallback
+RAW_DB_URL = os.getenv("DATABASE_URL", "postgresql://careerpath_user:change_me_strong_password@postgres:5432/careerpath")
+SYNC_DB_URL = RAW_DB_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 async def consume_cv_uploaded_events() -> None:
     consumer = AIOKafkaConsumer(
@@ -28,22 +33,38 @@ async def consume_cv_uploaded_events() -> None:
     )
 
     await consumer.start()
-    logger.info(
-        "Consumer conectat (brokers=%s, topic=%s, group=%s)",
-        KAFKA_BROKERS,
-        KAFKA_TOPIC,
-        KAFKA_GROUP_ID,
-    )
+    logger.info("Consumer conectat (brokers=%s, topic=%s, group=%s)", KAFKA_BROKERS, KAFKA_TOPIC, KAFKA_GROUP_ID)
+
+    # Inițializăm conexiunea la DB
+    try:
+        db_engine = create_engine(SYNC_DB_URL)
+    except Exception as db_init_err:
+        logger.error("Eroare la inițializarea bazei de date: %s", db_init_err)
+        db_engine = None
 
     try:
         async for message in consumer:
             payload = message.value
             user_id = payload.get("user_id")
-            cv_text = payload.get("cv_text")
             job_id = payload.get("job_id")
 
+            cv_text = payload.get("cv_text") or payload.get("extracted_text")
+
+            # Interogăm baza de date pentru a obține textul extras de cv-service
+            if not cv_text and job_id and db_engine:
+                logger.info("Recuperăm textul din baza de date pentru job_id: %s", job_id)
+                try:
+                    with db_engine.connect() as conn:
+                        query = text("SELECT extracted_text FROM cv_uploads WHERE id = :job_id")
+                        db_result = conn.execute(query, {"job_id": job_id}).fetchone()
+                        if db_result and db_result[0]:
+                            cv_text = db_result[0]
+                            logger.info("Textul a fost recuperat cu succes din PostgreSQL.")
+                except Exception as db_err:
+                    logger.error("Eroare la extragerea textului din baza de date: %s", db_err)
+
             if not user_id or not cv_text:
-                logger.warning("Mesaj invalid — lipsesc câmpuri obligatorii. Skip.")
+                logger.warning("Mesaj invalid — lipsesc câmpuri obligatorii sau textul nu a putut fi recuperat. Skip.")
                 await consumer.commit()
                 continue
 
@@ -82,6 +103,18 @@ async def consume_cv_uploaded_events() -> None:
                     result["job_id"] = job_id
 
                 await publish_cv_analyzed_event(result)
+
+                if db_engine and job_id:
+                    try:
+                        # Folosim .begin() pentru a face auto-commit la tranzacția de update
+                        with db_engine.begin() as conn:
+                            update_query = text("UPDATE cv_uploads SET status = 'completed' WHERE id = :job_id")
+                            conn.execute(update_query, {"job_id": job_id})
+                            logger.info("Statusul jobului %s a fost actualizat la 'completed'.", job_id)
+                    except Exception as db_update_err:
+                        logger.error("Eroare la actualizarea statusului: %s", db_update_err)
+                # -----------------------------------------------------
+
                 await consumer.commit()
                 logger.info("Procesare completă și offset comis pentru user: %s", user_id)
             except Exception as e:

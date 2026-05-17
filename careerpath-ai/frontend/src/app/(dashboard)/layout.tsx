@@ -2,100 +2,90 @@
 
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // Hook necesar pentru redirect la logout
 import { Sidebar } from "@/components/sidebar";
-import { Globe, Zap, ShieldCheck, UserCircle, LogOut } from "lucide-react";
+import { Globe, Zap, ShieldCheck, LogOut } from "lucide-react"; // Adăugat LogOut
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
+  // Execută curățarea sesiunii locale din browser
+  const handleLogout = () => {
+    localStorage.removeItem("auth-storage");
+    router.push("/");
+    router.refresh();
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#020617] text-white overflow-hidden relative font-sans">
       
-      {/* --- INJECTARE STIL SCROLLBAR (CUSTOM SLIDE) --- */}
+      {/* Scrollbar Ultra-Thin */}
       <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 5px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.05);
+          background: rgba(255, 255, 255, 0.03);
           border-radius: 10px;
-          transition: all 0.3s ease;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(99, 102, 241, 0.4);
-        }
-        /* Firefox */
-        .custom-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
         }
       `}</style>
 
-      {/* Background Decor consistent */}
+      {/* Glow-uri de fundal unificate */}
       <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-500/10 blur-[100px]" />
-        <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] rounded-full bg-blue-500/5 blur-[100px]" />
+        <div className="absolute top-[-10%] left-[-5%] w-[45%] h-[45%] rounded-full bg-indigo-500/[0.07] blur-[140px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[35%] h-[35%] rounded-full bg-blue-500/[0.04] blur-[120px]" />
       </div>
 
-      {/* --- HEADER PREMIUM --- */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center px-6 py-6">
-        <nav className="w-full max-w-[1440px] flex items-center justify-between px-8 py-3 bg-white/[0.02] border border-white/10 backdrop-blur-xl rounded-full shadow-2xl">
+      {/* --- HEADER --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center px-6 py-6 pointer-events-none">
+        <nav className="w-full max-w-[1440px] flex items-center justify-between px-8 py-3 bg-[#020617]/40 border border-white/5 backdrop-blur-3xl rounded-full shadow-2xl pointer-events-auto">
           
-          {/* Logo Abstract */}
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center gap-3 group transition-transform hover:scale-[1.01] cursor-pointer">
             <div className="relative w-7 h-7">
               <div className="absolute inset-0 bg-indigo-500 rounded-full animate-pulse opacity-20" />
-              <div className="absolute inset-0 border-2 border-indigo-400 rounded-full" />
-              <div className="absolute inset-0 border-2 border-white/30 rounded-full rotate-45 scale-75" />
+              <div className="absolute inset-0 border-2 border-indigo-400 rounded-full scale-100 group-hover:scale-105 transition-transform duration-500" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_#fff]" />
             </div>
-            <div className="flex flex-col leading-none text-left">
-              <span className="text-sm font-black tracking-[0.2em] uppercase text-white">CareerPath</span>
-              <span className="text-[9px] text-indigo-400 font-bold tracking-[0.4em] uppercase opacity-80 leading-tight">Intelligence</span>
+            <div className="flex flex-col leading-none">
+              <span className="text-sm font-black tracking-[0.2em] uppercase">CareerPath</span>
+              <span className="text-[9px] text-indigo-400 font-bold tracking-[0.4em] uppercase opacity-80 mt-1">Intelligence</span>
             </div>
           </Link>
 
-          {/* Navigație Centrată */}
+          {/* CORECTAT: Înlocuit butoanele defecte cu Link-uri cross-page inteligente către secțiunile Landing Page-ului */}
           <div className="hidden md:flex items-center gap-8">
-            <NavLink icon={<Globe size={14} />} label="Explore" />
-            <NavLink icon={<Zap size={14} />} label="AI Engine" />
-            <NavLink icon={<ShieldCheck size={14} />} label="Safety" />
+            <Link href="/#features" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors outline-none">
+              Why Us
+            </Link>
+            <Link href="/#process" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors outline-none">
+              The Process
+            </Link>
+            <Link href="/#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors outline-none">
+              Pricing
+            </Link>
           </div>
 
-          {/* Profil Utilizator */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 pl-4 border-l border-white/10 group cursor-pointer">
-              <div className="text-right hidden sm:block leading-none">
-                <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">ADMIN</p>
-                <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter opacity-80">Pro Account</p>
-              </div>
-              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 p-[1px] transition-transform group-hover:scale-105">
-                <div className="w-full h-full rounded-full bg-[#020617] flex items-center justify-center">
-                  <UserCircle size={20} className="text-white/80" />
-                </div>
-              </div>
-            </div>
-            
-            <button className="p-2 text-slate-500 hover:text-red-400 transition-colors">
-              <LogOut size={18} />
-            </button>
-          </div>
+          {/* ÎNLOCUIT CERCUL DE PROFIL CU BUTON DE LOGOUT PREMIUM SUB FORMĂ DE CAPSULĂ */}
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500/5 border border-red-500/10 rounded-full hover:bg-red-500 hover:text-white text-red-400 text-xs font-bold transition-all outline-none pointer-events-auto shadow-md"
+          >
+            <LogOut size={13} />
+            <span>Logout</span>
+          </button>
         </nav>
       </header>
 
-      {/* Structură Conținut cu Sidebar */}
+      {/* --- ZONA DE CONTINUT (PUSH EFFECT) --- */}
       <div className="flex flex-1 overflow-hidden z-10 pt-28">
-        <aside className="w-64 hidden lg:block border-r border-white/5 bg-black/10 backdrop-blur-md overflow-hidden">
-          <Sidebar />
-        </aside>
+        {/* Sidebar integrat cromatic 100% */}
+        <Sidebar />
 
-        {/* --- MAIN AREA CU SCROLLBAR STILIZAT --- */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
-  <div className="max-w-[1400px] mx-auto w-full flex-1 flex flex-col p-10 min-h-0">
-    {children}
-  </div>
-</main>
+        {/* Main Area - fara bordura, fara padding forțat */}
+        <main className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="max-w-[1440px] mx-auto w-full p-10">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );
@@ -103,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function NavLink({ icon, label }: { icon: React.ReactNode, label: string }) {
   return (
-    <button className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-all group">
+    <button className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-all group">
       <span className="text-slate-600 group-hover:text-indigo-400 transition-colors">{icon}</span>
       {label}
     </button>

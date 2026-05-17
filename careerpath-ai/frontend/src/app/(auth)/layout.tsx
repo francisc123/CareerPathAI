@@ -35,11 +35,21 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </div>
           </Link>
 
+          {/* CORECTAT: Înlocuit butoanele defecte cu Link-uri cross-page inteligente către secțiunile Landing Page-ului */}
           <div className="hidden md:flex items-center gap-8">
-            <NavLink icon={<Globe size={14} />} label="Explore" />
-            <NavLink icon={<Zap size={14} />} label="AI Engine" />
-            <NavLink icon={<ShieldCheck size={14} />} label="Safety" />
+            <Link href="/#features" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors outline-none">
+              Why Us
+            </Link>
+            <Link href="/#process" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors outline-none">
+              The Process
+            </Link>
+            <Link href="/#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors outline-none">
+              Pricing
+            </Link>
           </div>
+
+
+
 
           <div>
              {/* Comutator dinamic pentru butonul din Header */}

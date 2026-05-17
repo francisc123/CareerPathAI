@@ -1,4 +1,4 @@
-.PHONY: up down logs ps build clean migrate keys help
+.PHONY: up down logs ps build clean migrate keys help test-flow1
 
 # ─── Dev ───────────────────────────────────────────────────────────────────────
 up:
@@ -36,8 +36,6 @@ keys:
 	openssl rsa -in keys/private.pem -pubout -out keys/public.pem
 	@echo "✓ RS256 key pair generated in ./keys/"
 
-# ─── Kafka topics ──────────────────────────────────────────────────────────────
-# ─── Redpanda topics ───────────────────────────────────────────────────────────
 # ─── Redpanda topics ───────────────────────────────────────────────────────────
 redpanda-topics:
 	docker cp infrastructure/redpanda/create-topics.sh careerpath-ai-redpanda-1:/tmp/create-topics.sh
@@ -47,11 +45,6 @@ redpanda-topics:
 logs-gateway:
 	docker compose logs -f api-gateway
 
-# ─── MinIO Init ────────────────────────────────────────────────────────────────
-minio-init:
-	docker-compose cp infrastructure/minio/init-buckets.sh minio:/tmp/init-buckets.sh
-	docker-compose exec minio bash /tmp/init-buckets.sh
-
 logs-cv:
 	docker compose logs -f cv-service cv-analyzer-agent
 
@@ -60,6 +53,18 @@ logs-agents:
 
 logs-interview:
 	docker compose logs -f hr-interview-agent technical-interview-agent
+
+# ─── MinIO Init ────────────────────────────────────────────────────────────────
+minio-init:
+	docker-compose cp infrastructure/minio/init-buckets.sh minio:/tmp/init-buckets.sh
+	docker-compose exec minio bash /tmp/init-buckets.sh
+
+# ─── E2E Testing ───────────────────────────────────────────────────────────────
+test-flow1:
+	@echo "Checking E2E prerequisites..."
+	@command -v jq >/dev/null 2>&1 || { echo >&2 "Error: 'jq' is required but not installed. Run: brew install jq"; exit 1; }
+	@echo "Executing E2E Integration Script for Flow 1..."
+	@bash tests/e2e/flow1_test.sh
 
 # ─── Cleanup ───────────────────────────────────────────────────────────────────
 clean:
@@ -92,6 +97,7 @@ help:
 	@echo "  make migrate      - Run DB migrations"
 	@echo "  make keys         - Generate RS256 JWT keys"
 	@echo "  make kafka-topics - Create Kafka topics"
+	@echo "  make test-flow1   - Run Flow 1 E2E Integration Test"
 	@echo "  make clean        - Remove all containers and volumes"
 	@echo "  make prod-up      - Start in production mode"
 	@echo "  make test-flow3   - Run Flow 3 (HR + Tech interview) e2e test"

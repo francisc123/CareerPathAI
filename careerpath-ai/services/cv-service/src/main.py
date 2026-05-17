@@ -12,7 +12,8 @@ from shared.types.kafka_events import CvUploadedEvent
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy import Column, String, DateTime, Text, func, select
+# Am adăugat 'text' la importurile sqlalchemy
+from sqlalchemy import Column, String, DateTime, Text, func, select, text
 
 from cp_kafka import KafkaProducerBase
 
@@ -62,8 +63,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # --- MODIFICARE AICI ---
-    # Setup Redpanda/Kafka Producer folosind noul pachet shared
+    # Setup Redpanda/Kafka Producer folosind pachetul shared
     global producer
     producer = KafkaProducerBase(bootstrap_servers=REDPANDA_BROKER)
     await producer.start()
@@ -73,8 +73,6 @@ async def lifespan(app: FastAPI):
     await producer.stop()
 
 app = FastAPI(lifespan=lifespan, title="CV Service")
-
-# Clasa locală CvUploadedEvent a fost ștearsă complet (folosim importul de sus)
 
 # Endpoints
 @app.post("/upload")
@@ -129,21 +127,27 @@ async def upload_cv(
     db.add(new_cv)
     await db.commit()
 
-    # --- MODIFICARE AICI ---
-    # 6. Publish eveniment către Redpanda folosind structura din shared/types
-    event = CvUploadedEvent(
-        user_id=x_user_id,
-        job_id=job_id,
-        minio_path=file_path,
-        file_name=file.filename,
-        timestamp=datetime.utcnow()
-    )
-    # Metoda noului nostru pachet se ocupă de serializarea în JSON automat
-    await producer.send_message("cv.uploaded", event)
-    # -----------------------
+    # 6. Publish eveniment către Redpanda folosind structura curată și nativă
+    try:
+        event = CvUploadedEvent(
+            user_id=x_user_id,
+            job_id=job_id,
+            minio_path=file_path,
+            file_name=file.filename,
+            timestamp=datetime.utcnow()
+        )
+
+        await producer.send_message("cv.uploaded", event)
+
+    except Exception as kafka_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Kafka Event Generation failed: {str(kafka_error)}"
+        )
 
     return {"job_id": job_id, "status": "processing"}
 
+# Endpoint modificat pentru a returna scorul
 @app.get("/status/{job_id}")
 async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(CVUpload).where(CVUpload.id == job_id))
@@ -152,7 +156,22 @@ async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
     if not job:
         raise HTTPException(status_code=404, detail="Job ID not found")
 
+    score = 0
+
+    if job.status == "completed":
+        try:
+            score_result = await db.execute(
+                text("SELECT score FROM cv_analysis_results WHERE user_id = :uid ORDER BY id DESC LIMIT 1"),
+                {"uid": job.user_id}
+            )
+            score_row = score_result.fetchone()
+            if score_row and score_row[0] is not None:
+                score = score_row[0]
+        except Exception as e:
+            print(f"Eroare la citirea scorului din baza de date: {e}")
+
     return {
         "job_id": job.id,
-        "status": job.status
+        "status": job.status,
+        "score": score
     }
