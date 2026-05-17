@@ -361,7 +361,6 @@ services:
     ports: ["4317:4317", "4318:4318"]
     networks: [internal-net]
     restart: unless-stopped
-    profiles: [observability]
 
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -371,7 +370,6 @@ services:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks: [internal-net]
     restart: unless-stopped
-    profiles: [observability]
 
   loki:
     image: grafana/loki:3.0.0
@@ -381,7 +379,6 @@ services:
       - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
     networks: [internal-net]
     restart: unless-stopped
-    profiles: [observability]
 
   tempo:
     image: grafana/tempo:latest
@@ -397,7 +394,6 @@ services:
       - "9095:9095"
     networks: [internal-net]
     restart: unless-stopped
-    profiles: [observability]
 
   grafana:
     image: grafana/grafana:11.1.0
@@ -413,4 +409,3 @@ services:
     depends_on: [prometheus, loki, tempo]
     networks: [internal-net]
     restart: unless-stopped
-    profiles: [observability]

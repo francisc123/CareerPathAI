@@ -5,6 +5,8 @@ qdrant-client>=1.10,<1.12
 google-genai
 python-dotenv
 pydantic
-asyncpg
+asyncpg>=0.29,<1
 fastembed
-sqlalchemy
+sqlalchemy[asyncio]>=2.0,<3
+tenacity>=8.2,<9
+python-jose[cryptography]>=3.3,<4
