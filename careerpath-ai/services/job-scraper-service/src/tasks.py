@@ -1,8 +1,8 @@
 import xxhash
-from celery_app import celery_app
-from database import SessionLocal, ScrapedJob
-from scrapers.linkedin import scrape_linkedin
-from scrapers.ejobs import scrape_ejobs
+from src.celery_app import celery_app
+from src.database import SessionLocal, ScrapedJob
+from src.scrapers.linkedin import scrape_linkedin
+from src.scrapers.ejobs import scrape_ejobs
 # de implementat similar pentru Indeed
 
 @celery_app.task(name="tasks.run_scraping_pipeline")
