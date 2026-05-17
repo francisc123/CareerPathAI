@@ -9,3 +9,4 @@ pydantic
 httpx
 prometheus-fastapi-instrumentator
 google-genai
+tenacity>=8.2,<9

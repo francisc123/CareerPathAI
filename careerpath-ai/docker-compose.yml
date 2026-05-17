@@ -1,4 +1,3 @@
-version: "3.9"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CareerPath AI — Docker Compose (Development Unificat)
@@ -201,13 +200,20 @@ services:
     restart: unless-stopped
 
   mailhog:
-    image: mailhog/mailhog:latest
+    image: axllent/mailpit:latest
     container_name: cp-mailhog
     ports:
       - "1025:1025"
       - "8025:8025"
     networks:
       - internal-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -233,9 +239,6 @@ services:
       - qdrant_data:/qdrant/storage
       - ./infrastructure/qdrant/config.yaml:/qdrant/config/production.yaml:ro
     networks: [internal-net]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
-      interval: 10s
     restart: unless-stopped
 
   redpanda:
@@ -296,8 +299,12 @@ services:
       - minio_data:/data
     networks: [internal-net]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # Folosim utilitarul oficial mc inclus nativ
+      test: ["CMD", "mc", "ready", "local"]
       interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   # ── Layer 6 · Observability ────────────────────────────────────────────────
@@ -332,11 +339,17 @@ services:
     profiles: [observability]
 
   tempo:
-    image: grafana/tempo:2.5.0
+    image: grafana/tempo:latest
     container_name: cp-tempo
-    ports: ["3200:3200"]
-    volumes:
-      - ./observability/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
+    command: [
+      "-server.http-listen-port=3200",
+      "-storage.trace.backend=local",
+      "-storage.trace.local.path=/tmp/tempo/traces",
+      "-storage.trace.wal.path=/tmp/tempo/wal"
+    ]
+    ports:
+      - "3200:3200"
+      - "9095:9095"
     networks: [internal-net]
     restart: unless-stopped
     profiles: [observability]

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .consumer import consume
 from .database import get_db_session, get_job_matches_for_user
+from .retry import startup_retry
 
 consumer_task = None
 

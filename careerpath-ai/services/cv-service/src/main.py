@@ -18,6 +18,7 @@ from sqlalchemy import Column, String, DateTime, Text, func, select, text
 from cp_kafka import KafkaProducerBase
 
 from extraction import extract_text_from_bytes
+from .retry import startup_retry
 
 # Configuratii
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careerpath_user:change_me_strong_password@postgres:5432/careerpath").replace("postgresql://", "postgresql+asyncpg://")

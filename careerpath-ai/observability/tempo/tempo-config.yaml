@@ -1,24 +1,51 @@
 server:
   http_listen_port: 3200
+  grpc_listen_port: 9095
+  log_level: warn
 
 distributor:
   receivers:
     otlp:
       protocols:
-        grpc: { endpoint: 0.0.0.0:4317 }
-        http:  { endpoint: 0.0.0.0:4318 }
+        grpc:
+          endpoint: 0.0.0.0:4319    # internal; otel-collector forwards to it
+        http:
+          endpoint: 0.0.0.0:4320
 
 ingester:
-  max_block_duration: 5m
+  max_block_duration: 5m            # cut blocks more often in dev
 
 compactor:
   compaction:
-    block_retention: 168h   # 7 days
+    block_retention: 24h            # keep traces for one day in dev
 
 storage:
   trace:
     backend: local
     local:
-      path: /var/tempo/traces
+      path: /tmp/tempo/blocks
     wal:
-      path: /var/tempo/wal
+      path: /tmp/tempo/wal
+
+usage_report:
+  reporting_enabled: false
+  storage:
+    backend: local
+    local:
+      path: /tmp/tempo/usage-report
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: careerpath-dev
+  storage:
+    path: /tmp/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]

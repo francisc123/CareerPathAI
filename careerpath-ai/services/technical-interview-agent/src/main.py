@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from .connection_manager import manager
 from .conversation import stream_ai_response, analyze_and_save_transcript
 from .prompts import INITIAL_GREETING
+from .retry import startup_retry
+
 
 app = FastAPI(title="Technical Interview Agent")
 

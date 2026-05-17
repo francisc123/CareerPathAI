@@ -8,6 +8,7 @@ from .consumer import run_consumer_in_background
 from .config import REDIS_URL
 from .chat_agent import chat
 from prometheus_fastapi_instrumentator import Instrumentator
+from .retry import startup_retry
 
 logger = logging.getLogger(__name__)
 

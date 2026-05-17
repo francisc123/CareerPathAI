@@ -2,30 +2,49 @@ auth_enabled: false
 
 server:
   http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
 
-ingester:
-  lifecycler:
-    ring:
-      kvstore: { store: inmemory }
-      replication_factor: 1
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /tmp/loki
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Embedded single-binary scheduler — no need for memberlist or external KV
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
 
 schema_config:
   configs:
     - from: 2024-01-01
-      store: boltdb-shipper
+      store: tsdb
       object_store: filesystem
       schema: v13
       index:
         prefix: index_
         period: 24h
 
-storage_config:
-  boltdb_shipper:
-    active_index_directory: /loki/index
-    cache_location: /loki/cache
-  filesystem:
-    directory: /loki/chunks
+ruler:
+  alertmanager_url: http://localhost:9093
 
+# Disable analytics ping to grafana.net
+analytics:
+  reporting_enabled: false
+
+# Generous limits for dev — no rate-limiting headaches when replaying logs
 limits_config:
-  ingestion_rate_mb: 16
-  max_query_series: 5000
+  reject_old_samples: false
+  reject_old_samples_max_age: 168h
+  retention_period: 168h
+  allow_structured_metadata: true

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .consumer import run_consumer_in_background
 from .database import get_db_pool, get_learning_path
+from .retry import startup_retry
 
 _db_pool = None
 
