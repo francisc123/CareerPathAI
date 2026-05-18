@@ -10,6 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/users")
@@ -19,6 +22,8 @@ public class UserController {
     private UserService userService;
     @Autowired
     private UserProgressRepository progressRepository;
+    @Autowired
+    private UserRepository userRepository;
     @Autowired
     private org.springframework.kafka.core.KafkaTemplate<String, String> kafkaTemplate;
 
@@ -163,5 +168,54 @@ public class UserController {
         dashboard.setTopJobMatches(new java.util.ArrayList<>());
 
         return dashboard;
+    }
+
+    @PostMapping("/register")
+    public org.springframework.http.ResponseEntity<?> registerLocalUser(@RequestBody java.util.Map<String, String> payload) {
+        // Extragem valorile din JSON-ul trimis de Gateway
+        String id = payload.get("id");
+        String email = payload.get("email");
+        String username = payload.get("username");
+
+        if (id == null || email == null) {
+            java.util.Map<String, String> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("message", "Id-ul și Email-ul sunt obligatorii");
+            return org.springframework.http.ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        // Salvăm utilizatorul în PostgreSQL folosind repository-ul injectat
+        com.careerpath.userservice.model.User user = userRepository.findById(id)
+                .orElseGet(() -> {
+                    com.careerpath.userservice.model.User newUser = new com.careerpath.userservice.model.User();
+                    newUser.setId(id);
+                    newUser.setEmail(email);
+                    newUser.setUsername(username);
+                    return userRepository.save(newUser);
+                });
+
+        return org.springframework.http.ResponseEntity.status(201).body(user);
+    }
+
+    @PostMapping("/verify-credentials")
+    public org.springframework.http.ResponseEntity<?> verifyCredentials(@RequestBody java.util.Map<String, String> payload) {
+        String email = payload.get("email");
+        String password = payload.get("password");
+
+        if (email == null || password == null) {
+            java.util.Map<String, String> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("message", "Email-ul și parola sunt obligatorii");
+            return org.springframework.http.ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        java.util.Optional<com.careerpath.userservice.model.User> userOpt = userRepository.findByEmail(email);
+
+        if (userOpt.isPresent()) {
+            // Utilizatorul există (TODO: adaugă logica de hashing BCrypt pentru parolă pe viitor)
+            return org.springframework.http.ResponseEntity.ok(userOpt.get());
+        } else {
+            java.util.Map<String, String> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("message", "Credențiale invalide sau utilizator inexistent");
+            return org.springframework.http.ResponseEntity.status(401).body(errorResponse);
+        }
     }
 }

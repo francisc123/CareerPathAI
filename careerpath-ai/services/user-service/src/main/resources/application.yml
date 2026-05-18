@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB:careerpath}
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/user_db
     username: ${POSTGRES_USER:careerpath_user}
     password: ${POSTGRES_PASSWORD:change_me_strong_password}
     driver-class-name: org.postgresql.Driver

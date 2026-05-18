@@ -12,12 +12,13 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         http
-                .csrf(csrf -> csrf.disable()) // Dezactivăm CSRF pentru a permite metodele PUT/POST din scripturi externe
+                .csrf(csrf -> csrf.disable()) // Dezactivăm CSRF
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/users/progress").permitAll() // Permite accesul nesemnat strict pentru acest endpoint
-                        .requestMatchers("/api/**").authenticated()          // Restul rutei /api/ rămâne securizat cu JWT
+                        .requestMatchers("/api/users/progress").permitAll()
+                        .requestMatchers("/api/users/register").permitAll()          // <-- ADĂUGATĂ ACUM
+                        .requestMatchers("/api/users/verify-credentials").permitAll() // <-- ADĂUGATĂ ACUM
+                        .requestMatchers("/api/**").authenticated()          // Restul rutei rămâne securizat
                         .anyRequest().permitAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));

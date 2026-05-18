@@ -25,20 +25,86 @@ export class AuthController {
 
     @Public()
     @Post('login')
-    login(@Body() body: LoginDto) {
-        if (!body.email || !body.password) throw new BadRequestException('Email și parola sunt obligatorii');
-        const userId = Buffer.from(body.email).toString('base64url');
-        const user = { id: userId, email: body.email, name: body.email.split('@')[0] };
-        return { user, token: this.sign({ sub: userId, email: body.email, name: user.name }) };
+    async login(@Body() body: LoginDto) {
+        if (!body.email || !body.password) {
+            throw new BadRequestException('Email și parola sunt obligatorii');
+        }
+
+        try {
+            // Trimitem datele de logare către user-service pentru verificare în baza de date
+            const upstream = await fetch('http://cp-user-service:8001/api/users/verify-credentials', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: body.email,
+                    password: body.password
+                }),
+            });
+
+            const data = await upstream.json().catch(() => ({}));
+
+            if (!upstream.ok) {
+                throw new BadRequestException(data.message || 'Credențiale invalide');
+            }
+
+            // Dacă Spring Boot a confirmat utilizatorul, extragem datele lui reale salvate în Postgres
+            const userId = data.id;
+            const user = { id: userId, email: data.email, name: data.username || data.email.split('@')[0] };
+
+            // Generăm token-ul oficial de sesiune bazat pe ID-ul real din baza de date
+            return {
+                user,
+                token: this.sign({ sub: userId, email: user.email, name: user.name })
+            };
+
+        } catch (error) {
+            if (error instanceof BadRequestException) throw error;
+            throw new BadRequestException('Nu s-a putut efectua autentificarea dintr-o eroare internă a gateway-ului');
+        }
     }
 
     @Public()
     @Post('register')
-    register(@Body() body: RegisterDto) {
-        if (!body.email || !body.password || !body.name) throw new BadRequestException('Toate câmpurile sunt obligatorii');
+    async register(@Body() body: RegisterDto) {
+        if (!body.email || !body.password || !body.name) {
+            throw new BadRequestException('Toate câmpurile sunt obligatorii');
+        }
+
+        // Generăm ID-ul stabil local pe baza emailului
         const userId = Buffer.from(body.email).toString('base64url');
-        const user = { id: userId, email: body.email, name: body.name };
-        return { user, token: this.sign({ sub: userId, email: body.email, name: body.name }) };
+
+        try {
+            // Trimitem datele către noul endpoint public din user-service
+            const upstream = await fetch('http://cp-user-service:8001/api/users/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: userId,
+                    email: body.email,
+                    username: body.name
+                }),
+            });
+
+            const data = await upstream.json().catch(() => ({}));
+
+            if (!upstream.ok) {
+                throw new BadRequestException('Eroare la persistarea utilizatorului în baza de date locală');
+            }
+
+            const user = { id: userId, email: body.email, name: body.name };
+            return {
+                user,
+                token: this.sign({ sub: userId, email: body.email, name: body.name })
+            };
+
+        } catch (error) {
+            if (error instanceof BadRequestException) throw error;
+            throw new BadRequestException('Microserviciul User-Service nu a putut fi accesat');
+        }
     }
 
     @Get('me')

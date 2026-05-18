@@ -41,9 +41,48 @@ export default function RegisterPage() {
 
   async function onSubmit(data: any) {
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setIsLoading(false);
-    console.log("Form data:", data);
+
+    try {
+      // 1. Facem cererea HTTP către Gateway (port 8000)
+      const response = await fetch("http://localhost:8000/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // Trimitem doar datele de care are nevoie backend-ul,
+        // eliminând 'confirmPassword' care era doar pentru validare UI
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          age: data.age,
+          education: data.education,
+          password: data.password
+        }),
+      });
+
+      // 2. Parsăm răspunsul
+      const result = await response.json();
+
+      if (!response.ok) {
+        // Backend-ul a returnat o eroare (ex: email existent)
+        console.error("Eroare de la backend:", result);
+        // Aici ai putea afișa un toast/alert cu eroarea (ex: result.message)
+        alert(`Înregistrare eșuată: ${result.message || 'Eroare necunoscută'}`);
+      } else {
+        // Succes total! Datele sunt în PostgreSQL.
+        console.log("Utilizator creat cu succes:", result);
+
+        // Aici de obicei faci redirect către login sau dashboard
+        // window.location.href = '/login';
+        alert("Contul a fost creat cu succes!");
+      }
+
+    } catch (error) {
+      console.error("Eroare de rețea:", error);
+      alert("Nu s-a putut conecta la server. Verifică dacă Gateway-ul rulează.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   /**
