@@ -15,7 +15,7 @@ You are professional, analytical, and direct. Your pace is fast and decision-ori
 
 STRICT RULES (follow without exception):
 
-1. LENGTH: Every response is MAXIMUM 2-3 short sentences.
+1. LENGTH: Every response is MAXIMUM 2-3 short sentences (exception: the final summary in rule 8 can be slightly longer).
 
 2. ONE question per message only.
 
@@ -26,21 +26,43 @@ STRICT RULES (follow without exception):
    - "Do you like explaining and documenting, or do you prefer staying in the code?"
    Adapt the options to what the user just told you.
 
-4. LIMIT: You have a budget of MAXIMUM 10 questions for the entire session. If the profile is clear after 4-5, go straight to the conclusion.
+4. RELEVANCE CHECK (clarification loop) — Before advancing, evaluate whether the user's last answer actually addresses the question you asked.
+   If the answer is irrelevant, ambiguous, joking, or off-topic for the parameter you needed, DO NOT move on.
+   Acknowledge briefly and re-ask the SAME question, ideally rephrased or with clearer options.
+   Example:
+   - You asked: "Ce buget ai pentru cursuri?"
+   - User said: "Vreau o cafea."
+   - WRONG: ask the next planned question.
+   - CORRECT: "Înțeleg, dar pentru a te direcționa corect am nevoie de o aproximație a bugetului. Sub 200 RON, între 200-500 RON, sau peste 500 RON?"
+   If the user already gave MULTIPLE pieces of info in one message (e.g. "sunt student la info, vreau frontend, am 0 experiență"), DO NOT re-ask those — internally mark them as captured and move to a new dimension.
 
-5. CONCLUSION: When you have enough data, write:
-   - The recommended role (e.g. Frontend Developer, QA Engineer, Data Analyst)
-   - 2 concrete steps to get started
-   - On the very next line, write exactly: CTA_READY
-   Do not write anything after CTA_READY.
+5. CONTEXT SWITCHING — If the user asks a tangential question (e.g. "Ce face un Data Engineer?" while you're triaging), follow this pattern:
+   a) Answer their question concisely in 1-2 sentences.
+   b) Bridge back explicitly: "Revenind la ce discutam, ..." and re-ask your last triage question.
+   Never silently abandon the triage flow when the user goes off-track.
 
-CORRECT ending example:
-  Your profile fits best with a **QA Engineer** role.
-  Step 1: Start with manual testing fundamentals (ISTQB Foundation level).
-  Step 2: Upload your CV for a detailed skills gap analysis.
-  CTA_READY
+6. ADAPTIVE TONE — Mirror the user's communication style:
+   - User writes short/terse → respond shorter, fewer options, no extra explanation.
+   - User writes long/exploratory → respond slightly more elaborate, add a brief rationale.
+   - User shows confusion ("nu știu", "habar n-am", "?") → briefly explain the options before re-asking.
+   Never sound like canned text. Match register: casual ↔ formal as the user does.
 
-LANGUAGE RULE: Always respond in the same language the user writes in. If the user writes in Romanian, respond in Romanian. If in English, respond in English.
+7. LIMIT: You have a budget of MAXIMUM 10 questions for the entire session. If the profile is clear after 4-5, go straight to the summary in rule 8.
+
+8. FINAL CONFIRMATION (semantic triage) — When you believe you have enough data, do NOT emit CTA_READY immediately. Two-step ending:
+   Step A — propose a summary. Write a short paragraph (3-5 sentences) summarizing what you understood:
+     - current situation (student / in tech / career switch)
+     - main interest / preference signals
+     - the recommended role
+     Then ask exactly: "Asta reflectă ce vrei? Confirmă cu DA să continuăm, sau spune-mi ce să ajustez."
+     DO NOT write CTA_READY in step A.
+   Step B — only after the user confirms (e.g. DA, da, yes, ok, corect, exact, perfect), emit:
+     - The recommended role (e.g. **Frontend Developer**, **QA Engineer**, **Data Analyst**)
+     - 2 concrete next steps
+     - On the very next line, write exactly: CTA_READY
+   If the user disagrees or adds correction in step A, integrate the correction and propose a REVISED summary, then re-ask for confirmation. Do not emit CTA_READY until you have explicit confirmation.
+
+9. LANGUAGE RULE: Always respond in the same language the user writes in. If the user writes in Romanian, respond in Romanian. If in English, respond in English.
 
 SPECIAL CASE — if the user's first message is "__init__":
   Reply with EXACTLY the following text, no extra words, no modifications:
@@ -76,8 +98,10 @@ async def _save_history(redis_client, user_id: str, history: list[dict]):
     await redis_client.set(f"chat:{user_id}", json.dumps(history), ex=86400)
 
 
-async def _extract_and_save_profile(redis_client, user_id: str, history: list[dict]):
-    """Silently extract structured profile from conversation and persist to Redis."""
+async def _extract_and_save_profile(redis_client, user_id: str, history: list[dict]) -> dict | None:
+    """Silently extract structured profile from conversation and persist to Redis.
+    Returns the parsed profile dict (or None on failure) so callers can gate on slot completeness.
+    """
     conversation_text = "\n".join(
         f"{'User' if m['role'] == 'user' else 'AI'}: {m['content']}"
         for m in history
@@ -99,8 +123,32 @@ async def _extract_and_save_profile(redis_client, user_id: str, history: list[di
         profile = json.loads(text)
         await redis_client.set(f"profile:{user_id}", json.dumps(profile), ex=86400 * 7)
         logger.info(f"Profile updated for {user_id}: {profile}")
+        return profile
     except Exception as e:
         logger.warning(f"Profile extraction skipped for {user_id}: {e}")
+        return None
+
+
+# Critical slots that MUST be filled before we accept a CTA_READY signal.
+# If any of these are null/empty, we re-arm the agent to keep triaging.
+REQUIRED_SLOTS = ("target_role", "current_situation")
+
+
+def _missing_slots(profile: dict | None) -> list[str]:
+    if not profile:
+        return list(REQUIRED_SLOTS)
+    return [s for s in REQUIRED_SLOTS if not profile.get(s)]
+
+
+# Demo-safe fallback questions used when Gemini is unavailable. Each one is a
+# binary-choice triage question, so the conversation can keep moving without an LLM.
+_FALLBACK_QUESTIONS = [
+    "Spune-mi pe scurt: lucrezi deja în tech, ești student, sau te gândești la reconversie?",
+    "Te atrage mai mult construirea de aplicații sau analiza datelor?",
+    "Preferi să lucrezi pe partea vizuală (frontend) sau pe logică/server (backend)?",
+    "Ai experiență practică cu cod, sau ești încă la nivel de teorie/cursuri?",
+    "Vrei să-mi dai mai multe detalii despre ce ai învățat până acum?",
+]
 
 
 async def chat(user_id: str, user_message: str) -> dict:
@@ -122,31 +170,58 @@ async def chat(user_id: str, user_message: str) -> dict:
             for m in history
         ]
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.65,
-                max_output_tokens=512,
-            ),
-        )
+        # Gemini call wrapped in try/except — if it fails (quota, network, API outage),
+        # fall back to a scripted triage question so the demo keeps flowing.
+        try:
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            response = await client.aio.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    temperature=0.65,
+                    max_output_tokens=512,
+                ),
+            )
+            raw = response.text.strip()
+        except Exception as gemini_err:
+            logger.error(f"Gemini call failed for {user_id}: {gemini_err}")
+            user_turns = sum(1 for m in history if m["role"] == "user")
+            # Cycle through fallback questions based on turn count.
+            raw = _FALLBACK_QUESTIONS[(user_turns - 1) % len(_FALLBACK_QUESTIONS)]
+            # Avoid storing a fake "model" turn that the next prompt would treat as real history.
+            history.append({"role": "model", "content": raw})
+            await _save_history(redis_client, user_id, history)
+            return {"text": raw, "cta": False}
 
-        raw = response.text.strip()
-
-        # Detect CTA_READY signal
+        # Detect CTA_READY signal emitted by the model.
         cta = "CTA_READY" in raw
-        # Strip the marker — show only the summary sentence
+        # Strip the marker — show only the summary sentence to the user.
         text = raw.replace("CTA_READY", "").strip()
 
         history.append({"role": "model", "content": raw})
         await _save_history(redis_client, user_id, history)
 
-        # Shadow profile extraction after every 2 user messages
+        # Shadow profile extraction after every 2 user messages, or right before a CTA.
         user_count = sum(1 for m in history if m["role"] == "user")
+        profile: dict | None = None
         if user_count % 2 == 0 or cta:
-            await _extract_and_save_profile(redis_client, user_id, history)
+            profile = await _extract_and_save_profile(redis_client, user_id, history)
+
+        # SLOT-FILLING GATE: if the model wants to finish but required slots are
+        # still empty, disarm the CTA. The next user turn will get a fresh prompt
+        # and the model will keep triaging (rule 4 in the system prompt covers this).
+        if cta:
+            if profile is None:
+                # Try to read whatever profile we have on file.
+                profile_raw = await redis_client.get(f"profile:{user_id}")
+                profile = json.loads(profile_raw) if profile_raw else None
+            missing = _missing_slots(profile)
+            if missing:
+                logger.warning(
+                    f"CTA disarmed for {user_id} — missing critical slots: {missing}"
+                )
+                cta = False
 
         return {"text": text, "cta": cta}
 

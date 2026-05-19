@@ -84,6 +84,35 @@ def _placeholder_resource(module_title: str) -> dict:
     }
 
 
+def _is_hallucinated_youtube_url(url: str) -> bool:
+    """A specific YouTube video URL (e.g. /watch?v=ID or youtu.be/ID) coming from
+    Gemini without enrichment from the real YouTube API is almost certainly
+    hallucinated. Search-results URLs (/results?search_query=...) are safe.
+    """
+    if not url:
+        return False
+    return "youtube.com/watch?v=" in url or "youtu.be/" in url
+
+
+def _rewrite_dead_youtube_links(module_title: str, resources: list[dict]) -> list[dict]:
+    """Replace probably-hallucinated YouTube watch URLs with a search query for
+    the module title. Other URLs (docs, articles) are passed through unchanged.
+    """
+    encoded = module_title.replace(" ", "+")
+    search_url = f"https://www.youtube.com/results?search_query={encoded}"
+    rewritten: list[dict] = []
+    for res in resources:
+        if _is_hallucinated_youtube_url(res.get("url", "")):
+            rewritten.append({
+                "type": "video",
+                "title": f"YouTube: {res.get('title', module_title)}",
+                "url": search_url,
+            })
+        else:
+            rewritten.append(res)
+    return rewritten
+
+
 def _dedupe_resources(resources: list[dict]) -> list[dict]:
     seen_urls: set[str] = set()
     deduped: list[dict] = []
@@ -112,6 +141,10 @@ async def _enrich_modules_with_real_links(path: LearningPath) -> LearningPath:
             real_links = await _fetch_real_resources(module.module_title)
 
         gemini_links = [r.model_dump() for r in module.resources]
+        # If we don't have real YouTube API hits, Gemini's specific /watch?v=ID
+        # links are likely hallucinated — rewrite them to safe search URLs.
+        if not real_links:
+            gemini_links = _rewrite_dead_youtube_links(module.module_title, gemini_links)
         # Prefer real-API hits; keep Gemini's links as fallback after dedupe.
         merged = _dedupe_resources(real_links + gemini_links)
         if not merged:
@@ -168,10 +201,18 @@ async def generate_learning_path_structure(
             config=types.GenerateContentConfig(
                 system_instruction=LEARNING_PATH_SYSTEM_PROMPT,
                 response_mime_type="application/json",
+                response_schema=LearningPath,
             ),
         )
-        path_data = json.loads(response.text)
-        validated = LearningPath(**path_data)
+        # With response_schema, the SDK exposes a pre-parsed/validated object via
+        # `response.parsed`. Fall back to manual parsing only if the SDK couldn't
+        # parse for some reason (e.g. older SDK or schema mismatch).
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, LearningPath):
+            validated = parsed
+        else:
+            path_data = json.loads(response.text)
+            validated = LearningPath(**path_data)
         logger.info("Gemini structure validated for '%s'.", target_role)
     except Exception as exc:
         logger.error("Error generating learning path skeleton: %s", exc)

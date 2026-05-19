@@ -1,4 +1,15 @@
 import logging
+import sys
+
+# Configure root logger so consumer.py / generator.py / database.py log lines
+# actually reach stdout (uvicorn only configures its own loggers).
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager

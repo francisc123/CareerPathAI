@@ -7,8 +7,9 @@ load_dotenv()
 # Prioritizăm variabila injectată de ancoră, dar punem un fallback complet valid pentru Docker bridge.
 KAFKA_BROKERS = os.getenv("KAFKA_BROKERS", "cp-redpanda:19092")
 
-# Topic-ul aliniat perfect cu cp-cv-analyzer
-TOPIC_GAPS_IDENTIFIED = "cv.analyzed"
+# Orchestrator-ul publică pe `gaps.identified` după ce decide ramura learning_path.
+# Learning-path-agent consumă din acest topic, nu direct din `cv.analyzed`.
+TOPIC_GAPS_IDENTIFIED = "gaps.identified"
 TOPIC_LEARNING_PATH_CREATED = "learning.path.created"
 TOPIC_GAPS_IDENTIFIED_DLQ = "gaps.identified.dlq"
 

@@ -96,3 +96,4 @@ services:
     command: uvicorn src.main:app --host 0.0.0.0 --port 8010 --reload --ws websockets
     volumes:
       - ./services/technical-interview-agent:/app
+
