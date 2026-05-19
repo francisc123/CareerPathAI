@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useAuthStore } from "@/store/auth.store";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import { 
   TerminalSquare, 
@@ -52,16 +53,53 @@ interface ChatMessage {
   type?: "normal" | "feedback" | "system_design";
 }
 
+type Verdict = "PASS" | "FAIL" | null;
+type Readiness = "junior" | "mid" | "senior" | null;
+
 interface FinalResults {
+  verdict: Verdict;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  optimizationInsights: string[];
+  readinessLevel: Readiness;
   score: number;
-  breakdown: string;
-  complexity: string;
-  improvements: string[];
+  problemsAttempted: number;
+  problemsPassed: number;
+}
+
+function loadCvForTech(): { skills: string; seniority: string } {
+  if (typeof window === "undefined") return { skills: "", seniority: "mid" };
+  try {
+    const raw = localStorage.getItem("careerpath_cv_analysis");
+    if (!raw) return { skills: "", seniority: "mid" };
+    const v = JSON.parse(raw);
+    const skills = Array.isArray(v?.strengths) ? v.strengths.slice(0, 6).join(",") : "";
+    const seniority = (v?.seniority || "mid").toLowerCase();
+    return { skills, seniority };
+  } catch {
+    return { skills: "", seniority: "mid" };
+  }
+}
+
+function hasCvAnalysis(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem("careerpath_cv_analysis");
+    if (!raw) return false;
+    const v = JSON.parse(raw);
+    return typeof v?.score === "number";
+  } catch {
+    return false;
+  }
 }
 
 export default function TechnicalInterviewPage() {
-  // --- MOCK GLOBAL STATE ---
-  const [hasPassedQuiz, setHasPassedQuiz] = useState(false); 
+  // Unlock-ul real: necesită un CV analizat. Dev unlock rămâne pentru regresie.
+  const [hasPassedQuiz, setHasPassedQuiz] = useState(false);
+  useEffect(() => {
+    if (hasCvAnalysis()) setHasPassedQuiz(true);
+  }, []);
 
   // --- STATE ---
   const [wsStatus, setWsStatus] = useState<WSStatus>("connecting");
@@ -123,12 +161,17 @@ export default function TechnicalInterviewPage() {
   }, [messages, activeTab, isAiTyping]);
 
   // --- WEBSOCKET CONNECTION ---
+  const token = useAuthStore((s) => s.token);
   const connectWS = useCallback(() => {
-    if (!hasPassedQuiz) return;
+    if (!hasPassedQuiz || !token) return;
 
     const sessionId = "session_" + Math.floor(Math.random() * 10000);
-    const token = "mock_jwt_token";
-    const wsUrl = process.env.NEXT_PUBLIC_TECH_WS_URL || `ws://localhost:8000/ws/tech-interview/${sessionId}?token=${token}`;
+    // Trimitem skills + seniority din analiza CV-ului ca să primim probleme
+    // adaptate (agentul tech-interview-agent acceptă ?skills=&seniority=).
+    const { skills, seniority } = loadCvForTech();
+    const qs = new URLSearchParams({ token, seniority });
+    if (skills) qs.set("skills", skills);
+    const wsUrl = process.env.NEXT_PUBLIC_TECH_WS_URL || `ws://localhost:8000/ws/tech-interview/${sessionId}?${qs.toString()}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -138,28 +181,67 @@ export default function TechnicalInterviewPage() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
-        switch(data.type) {
-          case "problem":
-            setProblem({ title: data.title, description: data.description, examples: data.examples });
+
+        switch (data.type) {
+          case "problem": {
+            const p = data.data || data;
+            setProblem({
+              title: p.title || "",
+              description: p.statement || p.description || "",
+              examples: Array.isArray(p.examples)
+                ? p.examples.map((ex: any) =>
+                    typeof ex === "string"
+                      ? ex
+                      : `Input: ${ex.input || ""}\nOutput: ${ex.output || ""}${ex.explanation ? "\n" + ex.explanation : ""}`
+                  )
+                : [],
+            });
             setActiveTab("problem");
             break;
-          case "chat":
-            setMessages(prev => [...prev, { from: "ai", text: data.text, type: "normal" }]);
+          }
+          case "chat_message":
+            setIsAiTyping(false);
+            setMessages(prev => [...prev, { from: "ai", text: data.text || "", type: "normal" }]);
             break;
-          case "system_design":
-            setMessages(prev => [...prev, { from: "ai", text: data.text, type: "system_design" }]);
-            setActiveTab("chat"); 
-            break;
-          case "evaluation":
+          case "test_results": {
             setIsEvaluating(false);
-            setTestResults(data.testResults);
-            setMessages(prev => [...prev, { from: "ai", text: data.feedback, type: "feedback" }]);
-            setActiveTab("chat");
+            const judge = data.data?.judge0 || {};
+            const evalData = data.data?.evaluation || {};
+            // Map backend's judge0 result onto the UI's TestCase shape (synthetic single row).
+            setTestResults([
+              {
+                name: evalData.passed ? "Reference test: PASS" : "Reference test: FAIL",
+                passed: !!evalData.passed,
+                time: judge.time_seconds ? `${(judge.time_seconds * 1000).toFixed(0)}ms` : "—",
+                memory: judge.memory_kb ? `${(judge.memory_kb / 1024).toFixed(1)} MB` : "—",
+              },
+            ]);
+            if (evalData.feedback) {
+              setMessages(prev => [...prev, { from: "ai", text: evalData.feedback, type: "feedback" }]);
+              setActiveTab("chat");
+            }
             break;
-          case "completed":
-            setResults(data.results);
+          }
+          case "hint_acknowledged":
+            // Counter UI is not currently shown; ignore silently.
+            break;
+          case "session_end":
+            setIsAiTyping(false);
+            setResults({
+              verdict: (data.verdict === "PASS" || data.verdict === "FAIL") ? data.verdict : null,
+              summary: data.summary || "",
+              strengths: Array.isArray(data.strengths) ? data.strengths : [],
+              weaknesses: Array.isArray(data.weaknesses) ? data.weaknesses : [],
+              optimizationInsights: Array.isArray(data.optimization_insights) ? data.optimization_insights : [],
+              readinessLevel: ["junior", "mid", "senior"].includes(data.readiness_level) ? data.readiness_level : null,
+              score: typeof data.score === "number" ? data.score : 0,
+              problemsAttempted: data.problems_attempted || 0,
+              problemsPassed: data.problems_passed || 0,
+            });
             setInterviewState("completed");
+            break;
+          case "error":
+            console.warn("Tech interview backend error:", data.message);
             break;
         }
       } catch (err) {
@@ -172,7 +254,7 @@ export default function TechnicalInterviewPage() {
       setTimeout(connectWS, 5000);
     };
     ws.onerror = () => ws.close();
-  }, [hasPassedQuiz]);
+  }, [hasPassedQuiz, token]);
 
   useEffect(() => {
     if (hasPassedQuiz) {
@@ -225,6 +307,7 @@ export default function TechnicalInterviewPage() {
     setChatInput("");
 
     if (wsRef.current && wsStatus === "connected") {
+      setIsAiTyping(true);
       wsRef.current.send(JSON.stringify({ type: "chat_message", text: userMessage }));
     } else {
       setIsAiTyping(true);
@@ -239,13 +322,24 @@ export default function TechnicalInterviewPage() {
           replyType = "system_design";
         } else if (userMessage.toLowerCase().includes("finish") || userMessage.toLowerCase().includes("final")) {
           setResults({
-            score: 88,
-            breakdown: "Algoritmica stabilă cu optimizare O(N) folosinf HashMap. Răspunsuri excelente pe partea de replicare și caching în Redis la System Design.",
-            complexity: "Time Complexity: O(N) | Space Complexity: O(N)",
-            improvements: [
-              "Fii mai atent la gestionarea condițiilor de eroare la valorile negative de intrare.",
-              "Detaliază mecanismul de consensus (ex. Raft/Paxos) când vorbești despre baze de date distribuite."
-            ]
+            verdict: "PASS",
+            summary: "Solid algorithmic intuition with consistent O(N) optimizations. Communicated tradeoffs clearly on system design follow-ups.",
+            strengths: [
+              "Chose hash maps for O(N) lookup on the array problem",
+              "Articulated caching strategy with Redis at the gateway",
+            ],
+            weaknesses: [
+              "Did not address negative-value edge cases",
+              "Distributed-DB consensus only briefly mentioned",
+            ],
+            optimizationInsights: [
+              "Could collapse the two-pass solution into a single pass with a running map",
+              "Consider Raft/Paxos when discussing replicated stores",
+            ],
+            readinessLevel: "mid",
+            score: 8,
+            problemsAttempted: 2,
+            problemsPassed: 2,
           });
           setInterviewState("completed");
           return;
@@ -267,9 +361,9 @@ export default function TechnicalInterviewPage() {
             <Lock size={24} />
           </div>
           <h2 className="text-xl font-black uppercase tracking-tight text-white mb-2">Interview Locked</h2>
-          <p className="text-xs font-medium text-slate-400 mb-6">You need to achieve an 80% passing score in core path components first.</p>
-          <Link href="/learning/path" className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
-            <BookOpen size={12} /> Open Curriculum
+          <p className="text-xs font-medium text-slate-400 mb-6">Încarcă un CV — interviul tehnic generează probleme calibrate pe skill-urile și seniority-ul tău.</p>
+          <Link href="/upload" className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
+            <BookOpen size={12} /> Upload CV
           </Link>
           <button onClick={() => setHasPassedQuiz(true)} className="mt-4 text-[8px] font-black text-slate-600 uppercase tracking-widest hover:text-white transition-colors">[Dev Unlock]</button>
         </div>
@@ -296,46 +390,95 @@ export default function TechnicalInterviewPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1 bg-[#0b0f1a]/60 border border-white/5 rounded-[32px] p-6 flex flex-col items-center justify-center gap-4 shadow-2xl backdrop-blur-xl">
-            <CVScoreGauge score={results.score} size={120} />
-            <div className="text-center">
-              <p className="text-xl font-black text-white">{results.score}/100</p>
-              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">Overall Technical Score</p>
+          <div className="md:col-span-1 bg-[#0b0f1a]/60 border border-white/5 rounded-[32px] p-6 flex flex-col items-center justify-center gap-5 shadow-2xl backdrop-blur-xl">
+            {results.verdict === "PASS" ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.25)]">
+                  <CheckCircle2 size={40} className="text-emerald-400" />
+                </div>
+                <p className="text-3xl font-black text-emerald-400 tracking-tight">PASS</p>
+                <p className="text-[9px] font-bold text-emerald-300 uppercase tracking-[0.3em]">Technical Verdict</p>
+              </div>
+            ) : results.verdict === "FAIL" ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-20 h-20 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center shadow-[0_0_30px_rgba(244,63,94,0.25)]">
+                  <XCircle size={40} className="text-rose-400" />
+                </div>
+                <p className="text-3xl font-black text-rose-400 tracking-tight">FAIL</p>
+                <p className="text-[9px] font-bold text-rose-300 uppercase tracking-[0.3em]">Technical Verdict</p>
+              </div>
+            ) : (
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Verdict unavailable</div>
+            )}
+
+            <div className="w-full pt-4 border-t border-white/5 grid grid-cols-2 gap-3">
+              <div className="text-center">
+                <p className="text-xl font-black text-white">{results.problemsPassed}/{results.problemsAttempted}</p>
+                <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Problems Solved</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-black text-indigo-400 uppercase">{results.readinessLevel || "—"}</p>
+                <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Readiness Level</p>
+              </div>
             </div>
           </div>
 
           <div className="md:col-span-2 bg-[#0b0f1a]/60 border border-white/5 rounded-[32px] p-6 space-y-6 shadow-2xl backdrop-blur-xl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <div className="flex items-center gap-2 text-slate-400 mb-2">
+                <TerminalSquare size={14} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Evaluator Summary</span>
+              </div>
+              <p className="text-xs font-medium text-slate-300 leading-relaxed">{results.summary}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-white/5">
               <div>
-                <div className="flex items-center gap-2 text-slate-400 mb-2">
-                  <TerminalSquare size={14} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Problem Breakdown</span>
+                <div className="flex items-center gap-2 text-emerald-400 mb-3">
+                  <CheckCircle2 size={14} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Strengths</span>
                 </div>
-                <p className="text-xs font-medium text-slate-300 leading-relaxed">{results.breakdown}</p>
+                <ul className="space-y-2">
+                  {results.strengths.map((s, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs font-medium text-slate-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
               </div>
               <div>
-                <div className="flex items-center gap-2 text-slate-400 mb-2">
-                  <Cpu size={14} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Code Complexity</span>
+                <div className="flex items-center gap-2 text-amber-400 mb-3">
+                  <Zap size={14} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Weaknesses</span>
                 </div>
-                <p className="text-xs font-medium text-slate-300 leading-relaxed">{results.complexity}</p>
+                <ul className="space-y-2">
+                  {results.weaknesses.map((w, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs font-medium text-slate-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-white/5">
-              <div className="flex items-center gap-2 text-emerald-400 mb-3">
-                <Zap size={14} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Key Areas for Improvement</span>
+            {results.optimizationInsights.length > 0 && (
+              <div className="pt-4 border-t border-white/5">
+                <div className="flex items-center gap-2 text-indigo-400 mb-3">
+                  <Cpu size={14} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Optimization Insights</span>
+                </div>
+                <ul className="space-y-2">
+                  {results.optimizationInsights.map((ins, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs font-medium text-slate-300">
+                      <ArrowRight size={14} className="text-indigo-500 shrink-0 mt-0.5" />
+                      {ins}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-2">
-                {results.improvements.map((imp, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-xs font-medium text-slate-300">
-                    <ArrowRight size={14} className="text-indigo-500 shrink-0 mt-0.5" />
-                    {imp}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            )}
           </div>
         </div>
       </div>

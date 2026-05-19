@@ -3,7 +3,7 @@ import { Kafka, Consumer } from 'kafkajs';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { EmailService } from '../email/email.service';
-import { SseController } from '../sse/sse.controller';
+import { NotificationBusService } from '../sse/notification-bus.service';
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
@@ -13,7 +13,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     constructor(
         private readonly httpService: HttpService,
         private readonly emailService: EmailService,
-        private readonly sseController: SseController,
+        private readonly bus: NotificationBusService,
     ) {
         const kafka = new Kafka({
             clientId: process.env.KAFKA_CLIENT_ID || 'careerpath-ai-notifications',
@@ -67,7 +67,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
                     }
 
                     // 2. Trimitere simultană pe cele 3 canale (SSE + Web Push + Email HTML)
-                    this.sseController.pushNotification({ userId, type: topic, data: payload });
+                    this.bus.publish({ userId, type: topic, data: payload });
 
                     switch (topic) {
                         case 'cv.analyzed':

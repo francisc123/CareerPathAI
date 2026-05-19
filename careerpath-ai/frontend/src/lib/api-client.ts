@@ -19,6 +19,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Token expirat sau invalid → curăță sesiunea și trimite la login.
+// Evită bucla pe ruta de login.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (typeof window !== 'undefined' && error?.response?.status === 401) {
+      const onLogin = window.location.pathname.startsWith('/login');
+      if (!onLogin) {
+        try { localStorage.removeItem('auth-storage'); } catch {}
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Funcție pentru upload CV
 export const uploadCV = async (file: File): Promise<{ job_id: string }> => {
   const formData = new FormData();
@@ -34,12 +50,8 @@ export const uploadCV = async (file: File): Promise<{ job_id: string }> => {
 };
 
 // --- AI Agent endpoints ---
-// NOTE for Francis: These call agents directly because API Gateway doesn't yet
-// have routes for /api/jobs and /api/learning. Add proxy routes to api-gateway
-// pointing to cp-job-match-agent:8007 and cp-learning-path-agent:8008.
-
-const JOB_AGENT_URL = process.env.NEXT_PUBLIC_JOB_AGENT_URL || 'http://localhost:8008';
-const LEARNING_AGENT_URL = process.env.NEXT_PUBLIC_LEARNING_AGENT_URL || 'http://localhost:8007';
+// Use API Gateway proxies for jobs and learning. These now go via /api/jobs
+// and /api/learning so the frontend doesn't call agent ports directly.
 
 export interface JobMatch {
   job_title: string;
@@ -52,10 +64,23 @@ export interface JobMatch {
   generated_cover_letter: string;
 }
 
+export interface Resource {
+  type: string;
+  title: string;
+  url: string;
+}
+
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  correct_index: number;
+}
+
 export interface LearningModule {
   module_title: string;
   description: string;
-  resources: { type: string; title: string; url: string }[];
+  resources: Resource[];
+  quiz: QuizQuestion[];
 }
 
 export interface WeeklyPlan {
@@ -69,15 +94,15 @@ export interface LearningPath {
   target_role: string;
   title: string;
   estimated_weeks: number;
-  plan_data: WeeklyPlan[];
+  weekly_plan: WeeklyPlan[];
 }
 
 export const getJobMatches = async (userId: string): Promise<{ matches: JobMatch[]; count: number }> => {
-  const response = await axios.get(`${JOB_AGENT_URL}/jobs/${userId}`);
+  const response = await api.get(`/jobs/${userId}`);
   return response.data;
 };
 
 export const getLearningPath = async (userId: string): Promise<LearningPath> => {
-  const response = await axios.get(`${LEARNING_AGENT_URL}/learning/${userId}`);
+  const response = await api.get(`/learning/${userId}`);
   return response.data;
 };

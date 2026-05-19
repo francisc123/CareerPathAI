@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { 
-  MessageSquare, 
-  Send, 
-  Sparkles, 
-  User, 
-  StopCircle, 
+import { useAuthStore } from "@/store/auth.store";
+import {
+  MessageSquare,
+  Send,
+  Sparkles,
+  User,
+  StopCircle,
   Award,
   Activity,
   ThumbsUp,
@@ -15,44 +16,65 @@ import {
   MessageCircle,
   Lock,
   BookOpen,
-  Zap
+  Zap,
+  CheckCircle2,
+  XCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type WSStatus = "connecting" | "connected" | "disconnected";
 type InterviewState = "ongoing" | "completed";
+type Verdict = "PASS" | "FAIL" | null;
 
 interface ChatMessage { from: "ai" | "user"; text: string; }
-interface HRFeedback { communicationScore: number; culturalFitScore: number; leadershipScore: number; overallScore: number; strengths: string[]; areasOfImprovement: string[]; summary: string; }
+interface HRFeedback {
+  verdict: Verdict;
+  summary: string;
+  strengths: string[];
+  areasOfImprovement: string[];
+}
 
-const MAX_TURNS = 15;
+function hasCvAnalysis(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem("careerpath_cv_analysis");
+    if (!raw) return false;
+    const v = JSON.parse(raw);
+    return typeof v?.score === "number";
+  } catch {
+    return false;
+  }
+}
 
 export default function HRInterviewPage() {
-  const [hasPassedQuiz, setHasPassedQuiz] = useState(false); 
+  // Unlock-ul real: necesită un CV analizat (avem score + target_role). Dev
+  // unlock-ul rămâne pentru cazuri de regresie.
+  const [hasPassedQuiz, setHasPassedQuiz] = useState(false);
+  useEffect(() => {
+    if (hasCvAnalysis()) setHasPassedQuiz(true);
+  }, []);
   const [wsStatus, setWsStatus] = useState<WSStatus>("connecting");
   const [interviewState, setInterviewState] = useState<InterviewState>("ongoing");
-  const [turnCount, setTurnCount] = useState(1);
   const [sessionId, setSessionId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [currentAiStream, setCurrentAiStream] = useState("");
-  const [isAiStreaming, setIsAiStreaming] = useState(false);
+  const [isAiTyping, setIsAiTyping] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [feedback, setFeedback] = useState<HRFeedback | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
-    if (!hasPassedQuiz) return; 
+    if (!hasPassedQuiz) return;
     const newSessionId = crypto.randomUUID ? crypto.randomUUID() : `mock-uuid-${Date.now()}`;
     setSessionId(newSessionId);
-    setMessages([{ from: "ai", text: "Hello! I'm your AI HR Interviewer. Today we'll discuss your experience, cultural fit, and soft skills to see how well you align with the company's values. Are you ready to begin?" }]);
+    setMessages([]);
   }, [hasPassedQuiz]);
 
   const connectWS = useCallback(() => {
-    if (!sessionId || !hasPassedQuiz) return;
-    const token = "mock_jwt_token"; 
+    if (!sessionId || !hasPassedQuiz || !token) return;
     const wsUrl = process.env.NEXT_PUBLIC_HR_WS_URL || `ws://localhost:8000/ws/hr-interview/${sessionId}?token=${token}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -60,18 +82,19 @@ export default function HRInterviewPage() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        switch(data.type) {
-          case "delta":
-            setIsAiStreaming(true);
-            setCurrentAiStream((prev) => prev + data.content);
-            break;
-          case "done":
-            setIsAiStreaming(false);
-            setMessages((prev) => [...prev, { from: "ai", text: currentAiStream || data.fullContent || "" }]);
-            setCurrentAiStream("");
+        switch (data.type) {
+          case "chat_message":
+            setIsAiTyping(false);
+            setMessages((prev) => [...prev, { from: "ai", text: data.text || "" }]);
             break;
           case "interview_complete":
-            setFeedback(data.feedback);
+            setIsAiTyping(false);
+            setFeedback({
+              verdict: (data.verdict === "PASS" || data.verdict === "FAIL") ? data.verdict : null,
+              summary: data.summary || "",
+              strengths: Array.isArray(data.strengths) ? data.strengths : [],
+              areasOfImprovement: Array.isArray(data.areas_of_improvement) ? data.areas_of_improvement : [],
+            });
             setInterviewState("completed");
             break;
         }
@@ -79,7 +102,7 @@ export default function HRInterviewPage() {
     };
     ws.onclose = () => { setWsStatus("disconnected"); setTimeout(connectWS, 5000); };
     ws.onerror = () => ws.close();
-  }, [sessionId, currentAiStream, hasPassedQuiz]);
+  }, [sessionId, hasPassedQuiz, token]);
 
   useEffect(() => {
     if (hasPassedQuiz) connectWS();
@@ -88,9 +111,8 @@ export default function HRInterviewPage() {
 
   useEffect(() => {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-  }, [messages, currentAiStream, isAiStreaming]);
+  }, [messages, isAiTyping]);
 
-  // --- FUNCTIA CORECTATĂ ACUM EXPORTATĂ ȘI DEFINITĂ PENTRU TEXTAREA ---
   const adjustTextareaHeight = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setChatInput(e.target.value);
     if (textareaRef.current) {
@@ -101,7 +123,7 @@ export default function HRInterviewPage() {
 
   const handleSendMessage = () => {
     const text = chatInput.trim();
-    if (!text || isAiStreaming) return;
+    if (!text || isAiTyping) return;
     setMessages(prev => [...prev, { from: "user", text }]);
     setChatInput("");
     if (textareaRef.current) {
@@ -109,27 +131,17 @@ export default function HRInterviewPage() {
     }
 
     if (wsRef.current && wsStatus === "connected") {
+      setIsAiTyping(true);
       wsRef.current.send(JSON.stringify({ type: "chat_message", text }));
-      setTurnCount(prev => Math.min(prev + 1, MAX_TURNS));
     } else {
-      setTurnCount(prev => Math.min(prev + 1, MAX_TURNS));
-      setIsAiStreaming(true);
+      // Dev/offline fallback — no live WS. Surface a single mock reply and let
+      // the user trigger completion explicitly via End Interview.
+      setIsAiTyping(true);
       setTimeout(() => {
-        if (text.toLowerCase().includes("end") || turnCount >= MAX_TURNS) { triggerInterviewComplete(); return; }
         const mockResponse = "That's a very interesting perspective. Can you give me a specific example of a time when you had to deal with a difficult team member to achieve that outcome?";
-        let charIndex = 0;
-        const streamInterval = setInterval(() => {
-          if (charIndex < mockResponse.length) {
-            setCurrentAiStream((prev) => prev + mockResponse[charIndex]);
-            charIndex++;
-          } else {
-            clearInterval(streamInterval);
-            setIsAiStreaming(false);
-            setMessages(prev => [...prev, { from: "ai", text: mockResponse }]);
-            setCurrentAiStream("");
-          }
-        }, 20); 
-      }, 600); 
+        setMessages(prev => [...prev, { from: "ai", text: mockResponse }]);
+        setIsAiTyping(false);
+      }, 600);
     }
   };
 
@@ -138,10 +150,13 @@ export default function HRInterviewPage() {
       wsRef.current.send(JSON.stringify({ type: "end_interview" }));
     } else {
       setFeedback({
-        overallScore: 85, communicationScore: 92, culturalFitScore: 82, leadershipScore: 88,
-        summary: "The candidate demonstrated excellent communication skills and a strong sense of accountability. They align well with our core values of transparency and fast-paced delivery, though there is room to grow.",
-        strengths: ["Clear and concise articulation of complex situations", "Strong emphasis on team collaboration"],
-        areasOfImprovement: ["Could provide more quantifiable metrics"]
+        verdict: "PASS",
+        summary: "The candidate demonstrated coherent answers with clear Situation + Action coverage and owned their contribution. Tone was professional throughout. Verdict: PASS.",
+        strengths: [
+          "Clear and concise articulation of complex situations",
+          "Strong emphasis on team collaboration",
+        ],
+        areasOfImprovement: ["Could provide more quantifiable metrics in future answers"],
       });
       setInterviewState("completed");
     }
@@ -154,8 +169,8 @@ export default function HRInterviewPage() {
         <div className="max-w-md w-full bg-[#0b0f1a]/80 border border-white/5 rounded-[28px] p-10 flex flex-col items-center text-center shadow-2xl backdrop-blur-xl relative overflow-hidden">
           <div className="w-16 h-16 rounded-[20px] bg-rose-500/10 flex items-center justify-center text-rose-400 border border-rose-500/20 mb-6 shadow-inner"><Lock size={24} /></div>
           <h2 className="text-xl font-black uppercase tracking-tight text-white mb-2">Interview Locked</h2>
-          <p className="text-xs font-medium text-slate-400 mb-6">You need to achieve an 80% passing score in core path components first.</p>
-          <Link href="/learning/path" className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all"><BookOpen size={12} /> Open Curriculum</Link>
+          <p className="text-xs font-medium text-slate-400 mb-6">Încarcă întâi un CV — interviul HR foloseste contextul tău (role, seniority, gaps).</p>
+          <Link href="/upload" className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all"><BookOpen size={12} /> Upload CV</Link>
           <button onClick={() => setHasPassedQuiz(true)} className="mt-4 text-[8px] font-black text-slate-600 uppercase tracking-widest hover:text-white transition-colors">[Dev Unlock]</button>
         </div>
       </div>
@@ -182,14 +197,10 @@ export default function HRInterviewPage() {
 
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-5 min-h-0">
           <div className="flex flex-col bg-[#0b0f1a]/60 border border-white/5 rounded-[28px] p-6 shadow-2xl backdrop-blur-xl h-full overflow-hidden">
-            <div className="flex items-center gap-2 text-slate-400 mb-5 shrink-0 border-b border-white/5 pb-3"><Activity size={14}/><span className="text-[10px] font-black uppercase tracking-widest">Performance Insights</span></div>
-            <div className="grid grid-cols-3 gap-3 shrink-0">
-              <QualitativeMetric label="Communication" score={feedback.communicationScore} icon={<MessageCircle size={14}/>} />
-              <QualitativeMetric label="Cultural Fit" score={feedback.culturalFitScore} icon={<BrainCircuit size={14}/>} />
-              <QualitativeMetric label="Leadership" score={feedback.leadershipScore} icon={<User size={14}/>} />
-            </div>
+            <div className="flex items-center gap-2 text-slate-400 mb-5 shrink-0 border-b border-white/5 pb-3"><Activity size={14}/><span className="text-[10px] font-black uppercase tracking-widest">Final Verdict</span></div>
+            <VerdictBadge verdict={feedback.verdict} />
             <div className="mt-6 flex flex-col flex-1 min-h-0">
-              <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 shrink-0">Executive Summary</h3>
+              <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2 shrink-0">Evaluator Summary</h3>
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-2"><p className="text-[13px] font-medium text-slate-300 leading-relaxed">{feedback.summary}</p></div>
             </div>
           </div>
@@ -228,10 +239,6 @@ export default function HRInterviewPage() {
         </div>
 
         <div className="flex items-center gap-6 shrink-0">
-          <div className="flex flex-col items-end">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Progress</span>
-            <div className="flex items-center gap-1.5"><span className="text-xs font-black text-white">Turn {turnCount}</span><span className="text-[10px] font-bold text-slate-500">/ {MAX_TURNS}</span></div>
-          </div>
           <button onClick={triggerInterviewComplete} className="px-5 py-2.5 rounded-[12px] font-black text-[10px] uppercase tracking-[0.15em] transition-all flex items-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/20 active:scale-95 outline-none"><StopCircle size={12} /> End Interview</button>
         </div>
       </div>
@@ -240,12 +247,12 @@ export default function HRInterviewPage() {
       <div className="flex-1 flex flex-col bg-[#0b0f1a]/60 border border-white/[0.06] rounded-[28px] overflow-hidden shadow-2xl backdrop-blur-xl min-h-0">
         <div ref={chatScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 min-h-0">
           {messages.map((msg, i) => <ChatBubble key={i} from={msg.from} text={msg.text} />)}
-          {isAiStreaming && <ChatBubble from="ai" text={currentAiStream} isStreaming={true} />}
+          {isAiTyping && <TypingIndicator />}
         </div>
         <div className="p-4 bg-white/[0.01] border-t border-white/5 shrink-0">
           <div className="relative flex items-end gap-3 bg-[#020617] border border-white/10 focus-within:border-indigo-500/40 rounded-xl p-2 shadow-inner">
-            <textarea ref={textareaRef} value={chatInput} onChange={adjustTextareaHeight} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder={isAiStreaming ? "AI is typing..." : "Type your answer... (Shift + Enter for new line)"} disabled={isAiStreaming} rows={1} className="w-full bg-transparent border-none outline-none text-sm font-medium text-white resize-none custom-scrollbar pl-4 py-2 placeholder:text-slate-600 disabled:opacity-50" />
-            <button onClick={handleSendMessage} disabled={!chatInput.trim() || isAiStreaming} className={cn("p-3 rounded-lg flex items-center justify-center shrink-0 transition-all", chatInput.trim() && !isAiStreaming ? "bg-indigo-600 text-white" : "bg-white/5 text-slate-500")}><Send size={14} /></button>
+            <textarea ref={textareaRef} value={chatInput} onChange={adjustTextareaHeight} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder={isAiTyping ? "AI is thinking..." : "Type your answer... (Shift + Enter for new line)"} disabled={isAiTyping} rows={1} className="w-full bg-transparent border-none outline-none text-sm font-medium text-white resize-none custom-scrollbar pl-4 py-2 placeholder:text-slate-600 disabled:opacity-50" />
+            <button onClick={handleSendMessage} disabled={!chatInput.trim() || isAiTyping} className={cn("p-3 rounded-lg flex items-center justify-center shrink-0 transition-all", chatInput.trim() && !isAiTyping ? "bg-indigo-600 text-white" : "bg-white/5 text-slate-500")}><Send size={14} /></button>
           </div>
         </div>
       </div>
@@ -253,18 +260,52 @@ export default function HRInterviewPage() {
   );
 }
 
-function QualitativeMetric({ label, score, icon }: any) {
-  const getLevel = (s: number) => {
-    if (s >= 90) return { text: "Exceptional", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" };
-    if (s >= 80) return { text: "Strong", color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" };
-    return { text: "Solid", color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" };
-  };
-  const level = getLevel(score);
+function VerdictBadge({ verdict }: { verdict: Verdict }) {
+  if (verdict === "PASS") {
+    return (
+      <div className="flex items-center justify-center gap-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 shrink-0">
+        <CheckCircle2 size={36} className="text-emerald-400 shrink-0" />
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-emerald-300 uppercase tracking-[0.3em]">Verdict</span>
+          <span className="text-3xl font-black text-emerald-400 tracking-tight">PASS</span>
+        </div>
+      </div>
+    );
+  }
+  if (verdict === "FAIL") {
+    return (
+      <div className="flex items-center justify-center gap-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl p-6 shrink-0">
+        <XCircle size={36} className="text-rose-400 shrink-0" />
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-rose-300 uppercase tracking-[0.3em]">Verdict</span>
+          <span className="text-3xl font-black text-rose-400 tracking-tight">FAIL</span>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5">
-      <div className="text-slate-500">{icon}</div>
-      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-      <div className={cn("px-2.5 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-widest text-center w-full", level.bg, level.color)}>{level.text}</div>
+    <div className="flex items-center justify-center gap-4 bg-white/[0.02] border border-white/10 rounded-2xl p-6 shrink-0">
+      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Verdict unavailable</span>
+    </div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex flex-col max-w-[85%] mr-auto items-start">
+      <div className="flex items-center gap-1.5 mb-1 px-1">
+        <div className="w-4 h-4 rounded-full bg-indigo-500/20 flex items-center justify-center">
+          <Sparkles size={8} className="text-indigo-400" />
+        </div>
+        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">AI Recruiter</span>
+      </div>
+      <div className="px-4 py-3 rounded-[20px] bg-white/[0.04] border border-white/5 rounded-tl-sm shadow-inner">
+        <div className="flex items-center gap-1.5 py-1 px-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -277,7 +318,7 @@ function TargetIcon({ size }: { size: number }) {
   );
 }
 
-function ChatBubble({ from, text, isStreaming = false }: { from: "ai" | "user", text: string, isStreaming?: boolean }) {
+function ChatBubble({ from, text }: { from: "ai" | "user", text: string }) {
   const isAi = from === "ai";
   return (
     <div className={cn("flex flex-col max-w-[85%]", isAi ? "mr-auto items-start" : "ml-auto items-end")}>
@@ -290,14 +331,6 @@ function ChatBubble({ from, text, isStreaming = false }: { from: "ai" | "user", 
       </div>
       <div className={cn("px-4 py-3 rounded-[20px] text-xs font-medium leading-relaxed whitespace-pre-wrap shadow-inner relative", isAi ? "bg-white/[0.04] text-slate-200 border border-white/5 rounded-tl-sm" : "bg-indigo-600 text-white rounded-tr-sm shadow-indigo-500/10")}>
         {text}
-        {isStreaming && text.length === 0 && (
-          <div className="flex items-center gap-1.5 py-1 px-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
-          </div>
-        )}
-        {isStreaming && text.length > 0 && <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-1 translate-y-1 animate-pulse" />}
       </div>
     </div>
   );

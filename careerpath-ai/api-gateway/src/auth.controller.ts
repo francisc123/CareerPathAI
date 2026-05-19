@@ -20,7 +20,9 @@ export class AuthController {
 
     private sign(payload: object): string {
         if (!this.privateKey) throw new BadRequestException('JWT private key not configured');
-        return jwt.sign(payload, this.privateKey, { algorithm: 'RS256', expiresIn: '15m' });
+        // Demo-friendly 24h expiry. Refresh-token flow isn't wired yet, so a short
+        // expiry would log everyone out mid-demo.
+        return jwt.sign(payload, this.privateKey, { algorithm: 'RS256', expiresIn: '24h' });
     }
 
     @Public()

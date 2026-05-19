@@ -42,7 +42,7 @@ export default function JobsPage() {
              <Sparkles size={16} />
              <span className="text-[10px] font-black uppercase tracking-[0.3em]">AI-Powered Engines</span>
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-white uppercase leading-none">Job Matches</h1>
+          <h1 className="text-3xl font-black tracking-tight text-white uppercase leading-none">Recommended For You</h1>
         </div>
         
         {/* Filters inline inside the unified header template */}

@@ -1,21 +1,28 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { 
-  Zap, 
-  User, 
-  Plus, 
-  MapPin, 
-  Target, 
-  Sparkles, 
+import Link from "next/link";
+import {
+  Zap,
+  User,
+  Plus,
+  MapPin,
+  Target,
+  Sparkles,
   Save,
   ChevronDown,
   Briefcase,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Award,
+  GraduationCap,
+  Building2,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatPanel } from "@/components/chat-panel";
+import { useAuthStore } from "@/store/auth.store";
+import { getLearningPath, getJobMatches, LearningPath } from "@/lib/api-client";
 
 // --- MOCK DATA ---
 const POPULAR_CITIES = [
@@ -45,6 +52,35 @@ interface ProfileData {
 // Cheia sub care vom salva datele in browser
 const STORAGE_KEY = "careerpath_user_profile";
 
+interface CvSnapshot {
+  score: number | null;
+  seniority: string | null;
+  targetRole?: string;
+  strengths: string[];
+  gaps: string[];
+  analyzedAt?: number;
+}
+
+interface CareerSnapshot {
+  cv: CvSnapshot | null;
+  path: LearningPath | null;
+  completedCount: number;
+  totalModules: number;
+  nextModuleId: string | null;
+  jobsCount: number;
+}
+
+function loadCvSnapshot(): CvSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("careerpath_cv_analysis");
+    if (!raw) return null;
+    return JSON.parse(raw) as CvSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 export default function DashboardPage() {
   const [profile, setProfile] = useState<ProfileData>({
     fullName: "",
@@ -61,19 +97,108 @@ export default function DashboardPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false); 
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [snapshot, setSnapshot] = useState<CareerSnapshot>({
+    cv: null,
+    path: null,
+    completedCount: 0,
+    totalModules: 0,
+    nextModuleId: null,
+    jobsCount: 0,
+  });
+  const authUser = useAuthStore((s) => s.user);
+
+  const firstName = (authUser?.name || profile.fullName || "").trim().split(" ")[0];
+  const greeting = firstName ? `Welcome back, ${firstName}!` : "Welcome to your profile";
 
   useEffect(() => {
     const savedProfile = localStorage.getItem(STORAGE_KEY);
+    let parsed: ProfileData | null = null;
     if (savedProfile) {
       try {
-        setProfile(JSON.parse(savedProfile));
+        parsed = JSON.parse(savedProfile);
       } catch (error) {
         console.error("Failed to parse profile data", error);
       }
     }
+
+    // Pre-fill from CV analysis any fields the user hasn't filled yet.
+    // Mapează: target_role → role, seniority CV → seniority.
+    const cv = loadCvSnapshot();
+    const merged: ProfileData = parsed ?? {
+      fullName: "",
+      role: "",
+      location: "",
+      workPreference: "",
+      seniority: "",
+      discovery: { passion: [], industry: [], environment: [] },
+    };
+    if (cv) {
+      if (!merged.role && cv.targetRole) merged.role = cv.targetRole;
+      if (!merged.seniority && cv.seniority) {
+        merged.seniority = cv.seniority.charAt(0).toUpperCase() + cv.seniority.slice(1).toLowerCase();
+      }
+    }
+    if (authUser?.name && !merged.fullName) merged.fullName = authUser.name;
+
+    setProfile(merged);
     setIsLoaded(true);
-  }, []);
+  }, [authUser?.name]);
+
+  // Persistă automat orice schimbare după hidratare — fără apăsare manuală.
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    } catch {}
+  }, [profile, isLoaded]);
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+    const cv = loadCvSnapshot();
+    let cancelled = false;
+
+    async function fetchCareer() {
+      let path: LearningPath | null = null;
+      let totalModules = 0;
+      let completedCount = 0;
+      let nextModuleId: string | null = null;
+      let jobsCount = 0;
+
+      try {
+        path = await getLearningPath(authUser!.id);
+        const completed: string[] = JSON.parse(localStorage.getItem("completed_modules") || "[]");
+        for (const week of path.weekly_plan || []) {
+          week.modules.forEach((_, mi) => {
+            const id = `w${week.week}-m${mi}`;
+            totalModules += 1;
+            if (completed.includes(id)) {
+              completedCount += 1;
+            } else if (!nextModuleId) {
+              nextModuleId = id;
+            }
+          });
+        }
+      } catch {
+        // 404 = no path yet; leave defaults
+      }
+
+      try {
+        const jobs = await getJobMatches(authUser!.id);
+        jobsCount = jobs?.count ?? 0;
+      } catch {
+        // 404 = no jobs yet
+      }
+
+      if (cancelled) return;
+      setSnapshot({ cv, path, totalModules, completedCount, nextModuleId, jobsCount });
+    }
+
+    fetchCareer();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id]);
 
   const handleSave = () => {
     setIsSaving(true);
@@ -98,9 +223,12 @@ export default function DashboardPage() {
              <Sparkles size={16} className="fill-current" />
              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Identity Hub</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white uppercase leading-none">Your Professional Profile</h1>
+          <h1 className="text-2xl font-black tracking-tight text-white uppercase leading-none">{greeting}</h1>
         </div>
       </div>
+
+      {/* --- CAREER SNAPSHOT --- live data from CV analysis + learning path + jobs */}
+      <CareerSnapshotStrip snapshot={snapshot} />
 
       {/* --- MAIN GRID (7 / 5) --- */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
@@ -253,6 +381,133 @@ export default function DashboardPage() {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+// --- CAREER SNAPSHOT STRIP --- real data from CV analysis + learning + jobs
+
+function CareerSnapshotStrip({ snapshot }: { snapshot: CareerSnapshot }) {
+  const { cv, path, completedCount, totalModules, nextModuleId, jobsCount } = snapshot;
+  const hasAnything = cv || path || totalModules > 0;
+
+  if (!hasAnything) {
+    return (
+      <div className="bg-[#0b0f1a]/40 border border-dashed border-white/10 rounded-[24px] p-6 flex items-center justify-between">
+        <div className="space-y-1">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Career snapshot</p>
+          <p className="text-sm font-medium text-slate-400">Upload your CV to populate this section.</p>
+        </div>
+        <Link
+          href="/upload"
+          className="px-5 py-2.5 bg-white text-black rounded-[12px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-2"
+        >
+          Upload CV <ArrowRight size={12} />
+        </Link>
+      </div>
+    );
+  }
+
+  const score = cv?.score ?? null;
+  const scoreColor = score === null
+    ? "text-slate-500"
+    : score >= 75
+      ? "text-emerald-400"
+      : score >= 55
+        ? "text-amber-400"
+        : "text-red-400";
+
+  const targetRole = cv?.targetRole || path?.target_role || "—";
+  const learningProgress = totalModules > 0 ? Math.round((completedCount / totalModules) * 100) : 0;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <SnapshotCard icon={<Award size={16} />} accent="indigo" label="CV Score">
+        <p className={cn("text-3xl font-black leading-none", scoreColor)}>
+          {score ?? "—"}<span className="text-xl text-slate-500">/100</span>
+        </p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">
+          {cv?.seniority ? `${cv.seniority} • ${cv.gaps.length} gaps` : "Awaiting analysis"}
+        </p>
+      </SnapshotCard>
+
+      <SnapshotCard icon={<Briefcase size={16} />} accent="emerald" label="Target Role">
+        <p className="text-base font-black text-white leading-tight truncate" title={targetRole}>
+          {targetRole}
+        </p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">
+          {path?.estimated_weeks ? `${path.estimated_weeks} week plan` : "From CV analysis"}
+        </p>
+      </SnapshotCard>
+
+      <SnapshotCard icon={<GraduationCap size={16} />} accent="violet" label="Learning Progress">
+        <p className="text-3xl font-black leading-none text-white">
+          {completedCount}<span className="text-xl text-slate-500">/{totalModules || "—"}</span>
+        </p>
+        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-2">
+          <div className="h-full bg-violet-500 transition-all duration-700" style={{ width: `${learningProgress}%` }} />
+        </div>
+      </SnapshotCard>
+
+      <SnapshotCard icon={<Building2 size={16} />} accent="amber" label="Jobs Matched">
+        <p className="text-3xl font-black leading-none text-white">
+          {jobsCount}
+        </p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">
+          {jobsCount > 0 ? "Tap Jobs in sidebar" : "Awaiting score ≥ 70"}
+        </p>
+      </SnapshotCard>
+
+      {nextModuleId && (
+        <div className="col-span-full bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-transparent border border-indigo-500/20 rounded-[20px] p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-[14px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shrink-0">
+              <Zap size={16} className="fill-current" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.3em] mb-0.5">Next up</p>
+              <p className="text-sm font-bold text-white truncate">Continue your learning path</p>
+            </div>
+          </div>
+          <Link
+            href="/learning/path"
+            className="shrink-0 px-5 py-2.5 bg-white text-black rounded-[12px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-2"
+          >
+            Continue <ArrowRight size={12} />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SnapshotCard({
+  icon,
+  label,
+  accent,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  accent: "indigo" | "emerald" | "violet" | "amber";
+  children: React.ReactNode;
+}) {
+  const tone = {
+    indigo: "bg-indigo-500/10 border-indigo-500/20 text-indigo-400",
+    emerald: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+    violet: "bg-violet-500/10 border-violet-500/20 text-violet-400",
+    amber: "bg-amber-500/10 border-amber-500/20 text-amber-400",
+  }[accent];
+
+  return (
+    <div className="bg-[#0b0f1a]/80 border border-white/5 rounded-[24px] p-5 backdrop-blur-xl">
+      <div className="flex items-center gap-3 mb-4">
+        <div className={cn("w-9 h-9 rounded-[12px] flex items-center justify-center border", tone)}>
+          {icon}
+        </div>
+        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">{label}</p>
+      </div>
+      {children}
     </div>
   );
 }

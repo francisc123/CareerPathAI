@@ -1,42 +1,148 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { 
-  Trophy, 
-  XCircle, 
-  ArrowLeft, 
-  ArrowRight, 
-  Zap, 
-  Activity, 
-  ThumbsUp, 
-  Target, 
+import {
+  Trophy,
+  XCircle,
+  ArrowLeft,
+  ArrowRight,
+  Zap,
+  Activity,
+  ThumbsUp,
+  Target,
   CheckCircle2,
   Lock,
   RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getLearningPath, QuizQuestion } from "@/lib/api-client";
+import { useAuthStore } from "@/store/auth.store";
 
-const MOCK_QUESTIONS = [
-  { id: 1, question: "Which hook is used to handle side effects in functional components?", options: ["useState", "useEffect", "useMemo", "useContext"], correct: 1 },
-  { id: 2, question: "What is the primary role of the Virtual DOM in React?", options: ["Direct database synchronisation", "Batching and optimizing UI updates", "Hardware graphics acceleration", "Local network security encryption"], correct: 1 },
-];
+interface QuizItem {
+  question: string;
+  options: string[];
+  correct: number;
+}
+
+function parseModuleId(id: string): { week: number; moduleIdx: number } | null {
+  const match = id.match(/^w(\d+)-m(\d+)$/);
+  if (!match) return null;
+  return { week: parseInt(match[1], 10), moduleIdx: parseInt(match[2], 10) };
+}
+
+function toQuizItems(quiz: QuizQuestion[]): QuizItem[] {
+  return quiz.map((q) => ({
+    question: q.question,
+    options: q.options,
+    correct: q.correct_index,
+  }));
+}
 
 export default function QuizPage() {
   const [step, setStep] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [answers, setAnswers] = useState<(boolean | null)[]>(new Array(MOCK_QUESTIONS.length).fill(null));
+  const [answers, setAnswers] = useState<(boolean | null)[]>([]);
   const [isFinished, setIsFinished] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
+  const [questions, setQuestions] = useState<QuizItem[]>([]);
+  const [moduleTitle, setModuleTitle] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const params = useParams();
-  
+  const userId = useAuthStore((s) => s.user?.id);
+
   const moduleId = (params?.id as string) || "w1-m0";
-  const currentQuestion = MOCK_QUESTIONS[step];
-  const totalQuestions = MOCK_QUESTIONS.length;
+  const currentQuestion = questions[step];
+  const totalQuestions = questions.length;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const parsed = parseModuleId(moduleId);
+      if (!parsed) {
+        setError("Invalid module id");
+        setLoading(false);
+        return;
+      }
+      if (!userId) {
+        setError("Please log in to take this assessment");
+        setLoading(false);
+        return;
+      }
+      try {
+        const path = await getLearningPath(userId);
+        const week = path.weekly_plan?.find((w) => w.week === parsed.week);
+        const mod = week?.modules?.[parsed.moduleIdx];
+        if (!mod) {
+          setError("Module not found in your learning path");
+          setLoading(false);
+          return;
+        }
+        const items = toQuizItems(mod.quiz || []);
+        if (items.length === 0) {
+          setError("No quiz questions generated for this module yet");
+          setLoading(false);
+          return;
+        }
+        if (cancelled) return;
+        setQuestions(items);
+        setAnswers(new Array(items.length).fill(null));
+        setModuleTitle(mod.module_title);
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.response?.status === 404 ? "Generate your learning path first" : (e?.message || "Failed to load quiz"));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [moduleId, userId]);
 
   // Calcul live în timpul testului
   const liveAccuracy = step === 0 ? 100 : Math.round((answers.slice(0, step).filter(a => a === true).length / step) * 100);
+
+  if (loading) {
+    return (
+      <div className="w-full h-[calc(100vh-210px)] flex items-center justify-center text-xs font-black uppercase tracking-widest text-slate-500">
+        Loading assessment...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-[calc(100vh-210px)] flex items-center justify-center">
+        <div className="max-w-md bg-[#0b0f1a]/80 border border-white/5 rounded-[28px] p-8 text-center backdrop-blur-xl">
+          <div className="w-14 h-14 rounded-[18px] bg-red-500/10 border border-red-500/20 text-red-400 mx-auto flex items-center justify-center mb-5">
+            <XCircle size={22} />
+          </div>
+          <h2 className="text-lg font-black uppercase tracking-tight text-white mb-2">Cannot start assessment</h2>
+          <p className="text-xs text-slate-400 leading-relaxed mb-6">{error}</p>
+          <button
+            onClick={() => router.push('/learning/path')}
+            className="px-6 py-2.5 bg-white text-black rounded-[12px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-indigo-500 hover:text-white transition-all"
+          >
+            Back to curriculum
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="w-full h-[calc(100vh-210px)] flex items-center justify-center text-xs font-black uppercase tracking-widest text-slate-500">
+        No question available
+      </div>
+    );
+  }
 
   const handleNext = () => {
     const isCorrect = selectedOption === currentQuestion.correct;
@@ -137,15 +243,17 @@ export default function QuizPage() {
                   <div className="flex items-start gap-2.5 bg-white/[0.02] border border-white/5 p-3 rounded-xl">
                     <ThumbsUp size={12} className="text-emerald-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Strength</p>
-                      <p className="text-[11px] font-medium text-slate-300">Strong grasp of core React hooks and component lifecycle.</p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Module</p>
+                      <p className="text-[11px] font-medium text-slate-300">{moduleTitle || "Assessment completed"}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2.5 bg-white/[0.02] border border-white/5 p-3 rounded-xl">
                     <Target size={12} className="text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Focus Area</p>
-                      <p className="text-[11px] font-medium text-slate-300">Review internal DOM reconciliation mechanics (Fiber Engine).</p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Results</p>
+                      <p className="text-[11px] font-medium text-slate-300">
+                        {answers.filter(a => a === true).length} of {totalQuestions} answered correctly
+                      </p>
                     </div>
                   </div>
                 </div>

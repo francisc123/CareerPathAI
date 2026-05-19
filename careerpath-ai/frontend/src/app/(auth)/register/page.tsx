@@ -4,7 +4,9 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { registerSchema } from "@/lib/validations/auth";
+import { useAuthStore } from "@/store/auth.store";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -13,6 +15,8 @@ import { ChevronDown, AlertCircle } from "lucide-react";
 export default function RegisterPage() {
   const [step, setStep] = React.useState(1);
   const [isLoading, setIsLoading] = React.useState(false);
+  const router = useRouter();
+  const setAuth = useAuthStore((s) => s.setAuth);
 
   const { 
     register, 
@@ -43,41 +47,35 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // 1. Facem cererea HTTP către Gateway (port 8000)
-      const response = await fetch("http://localhost:8000/api/auth/register", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const response = await fetch(`${apiUrl}/auth/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        // Trimitem doar datele de care are nevoie backend-ul,
-        // eliminând 'confirmPassword' care era doar pentru validare UI
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: data.name,
           email: data.email,
           age: data.age,
           education: data.education,
-          password: data.password
+          password: data.password,
         }),
       });
 
-      // 2. Parsăm răspunsul
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        // Backend-ul a returnat o eroare (ex: email existent)
-        console.error("Eroare de la backend:", result);
-        // Aici ai putea afișa un toast/alert cu eroarea (ex: result.message)
-        alert(`Înregistrare eșuată: ${result.message || 'Eroare necunoscută'}`);
-      } else {
-        // Succes total! Datele sunt în PostgreSQL.
-        console.log("Utilizator creat cu succes:", result);
-
-        // Aici de obicei faci redirect către login sau dashboard
-        // window.location.href = '/login';
-        alert("Contul a fost creat cu succes!");
+        alert(`Înregistrare eșuată: ${result.message || "Eroare necunoscută"}`);
+        return;
       }
 
-    } catch (error) {
+      // Backend-ul ne trimite { user, token } — salvăm sesiunea și mergem mai departe
+      if (result.user && result.token) {
+        setAuth(result.user, result.token);
+        router.push("/dashboard");
+      } else {
+        // fallback dacă backend-ul nu returnează token-ul (eveniment de regresie)
+        router.push("/login");
+      }
+    } catch (error: any) {
       console.error("Eroare de rețea:", error);
       alert("Nu s-a putut conecta la server. Verifică dacă Gateway-ul rulează.");
     } finally {

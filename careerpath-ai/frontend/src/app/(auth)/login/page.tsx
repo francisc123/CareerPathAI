@@ -31,16 +31,29 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" }
   });
 
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+
   async function onSubmit(data: LoginFormValues) {
     setIsLoading(true);
+    setErrorMsg(null);
     try {
-      await new Promise(r => setTimeout(r, 1200));
-      setAuth({ name: "User", email: data.email }, "mock-token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const res = await fetch(`${apiUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email, password: data.password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(body?.message || "Login failed");
+        return;
+      }
+      setAuth(body.user, body.token);
       router.push("/dashboard");
-    } catch (e) { 
-      console.error(e); 
-    } finally { 
-      setIsLoading(false); 
+    } catch (e: any) {
+      setErrorMsg(e?.message || "Network error");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -68,6 +81,12 @@ export default function LoginPage() {
         
         <h1 className="text-2xl font-bold tracking-tight mb-1 text-white">Welcome Back</h1>
         <p className="text-slate-500 text-xs italic mb-8 font-medium">Sign in to your CareerPath AI account</p>
+
+        {errorMsg && (
+          <div className="mb-4 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-[11px] font-bold text-left flex items-center gap-2">
+            <AlertCircle size={14} /> {errorMsg}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-left">
           <div className="space-y-1.5">

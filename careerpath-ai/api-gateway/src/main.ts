@@ -74,6 +74,42 @@ async function bootstrap() {
     }
   });
 
+  // PROXY PENTRU NOTIFICATION-SERVICE (SSE)
+  // Frontend deschide EventSource pe /api/notifications/sse/{userId}.
+  // Notification-service expune /sse/:userId — stripăm /api/notifications
+  // ca să cadă pe /sse/{userId}. Endpoint-ul nu cere JWT (userId e în URL).
+  await fastifyInstance.register(fastifyHttpProxy, {
+    upstream: process.env.NOTIFICATION_SERVICE_URL || 'http://cp-notification:8004',
+    prefix: '/api/notifications',
+    rewritePrefix: '',
+  });
+
+  // PROXY PENTRU JOB-MATCH-AGENT (frontend expects /api/jobs/{userId})
+  await fastifyInstance.register(fastifyHttpProxy, {
+    upstream: process.env.JOB_AGENT_URL || 'http://job-match-agent:8008',
+    prefix: '/api/jobs',
+    rewritePrefix: '/jobs',
+    preHandler: async (request: any, reply: any) => {
+      const xUserId = request.headers['x-user-id'];
+      if (!xUserId) {
+        const authHeader = request.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ') && publicKey) {
+          try {
+            const token = authHeader.split(' ')[1];
+            const payload: any = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
+            const userId = payload?.sub || payload?.id;
+            if (userId) {
+              request.headers['x-user-id'] = userId;
+            }
+          } catch (err) {
+            reply.code(401).send({ message: 'Unauthorized proxy access' });
+            return;
+          }
+        }
+      }
+    }
+  });
+
   // Activare WebSockets pentru interviuri
   await fastifyInstance.register(fastifyWebsocket, {
     options: { maxPayload: 1048576 }

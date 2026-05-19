@@ -1,54 +1,121 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { GraduationCap, Zap, Play, ExternalLink, ChevronRight, CheckCircle2, Lock, Timer, Trash2 } from "lucide-react";
+import { GraduationCap, Zap, Play, ExternalLink, ChevronRight, CheckCircle2, Lock, Timer, Trash2, Sparkles, MessageSquare, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getLearningPath, LearningPath } from "@/lib/api-client";
+import { useAuthStore } from "@/store/auth.store";
 
-const INITIAL_MODULES = [
-  { id: "w1-m0", title: "React Architecture & Performance", week: 1, status: "active", resources: 3, resourceList: [{ title: "Optimization Patterns and techniques", type: "Video", url: "#" }, { title: "Fiber Engine Explained Deep Dive", type: "Article", url: "#" }, { title: "Official Documentation", type: "Docs", url: "#" }] },
-  { id: "w1-m1", title: "Global State Management", week: 1, status: "locked", resources: 2, resourceList: [] },
-  { id: "w2-m0", title: "Advanced Rendering Patterns", week: 2, status: "locked", resources: 4, resourceList: [] },
-];
+type ModuleStatus = "active" | "locked" | "completed" | "cooldown";
+
+interface FlatModule {
+  id: string;
+  title: string;
+  description: string;
+  week: number;
+  status: ModuleStatus;
+  resourceList: { title: string; type: string; url: string }[];
+}
+
+function flattenPath(path: LearningPath): FlatModule[] {
+  const flat: FlatModule[] = [];
+  for (const week of path.weekly_plan || []) {
+    week.modules.forEach((mod, i) => {
+      flat.push({
+        id: `w${week.week}-m${i}`,
+        title: mod.module_title,
+        description: mod.description,
+        week: week.week,
+        status: "locked",
+        resourceList: (mod.resources || []).map((r) => ({
+          title: r.title,
+          type: r.type,
+          url: r.url,
+        })),
+      });
+    });
+  }
+  return flat;
+}
+
+function applyProgress(modules: FlatModule[]): FlatModule[] {
+  if (typeof window === "undefined") return modules;
+  const completed: string[] = JSON.parse(localStorage.getItem("completed_modules") || "[]");
+  const cooldowns: Record<string, number> = JSON.parse(localStorage.getItem("cooldown_modules") || "{}");
+  const now = Date.now();
+
+  let nextActiveAssigned = false;
+  return modules.map((mod) => {
+    if (completed.includes(mod.id)) return { ...mod, status: "completed" as const };
+    if (cooldowns[mod.id] && cooldowns[mod.id] > now) return { ...mod, status: "cooldown" as const };
+    if (!nextActiveAssigned) {
+      nextActiveAssigned = true;
+      return { ...mod, status: "active" as const };
+    }
+    return { ...mod, status: "locked" as const };
+  });
+}
 
 export default function LearningPathPage() {
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
-  const [modules, setModules] = useState(INITIAL_MODULES);
+  const [modules, setModules] = useState<FlatModule[]>([]);
+  const [path, setPath] = useState<LearningPath | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const userId = useAuthStore((s) => s.user?.id);
 
-  const syncData = () => {
-    const completed = JSON.parse(localStorage.getItem("completed_modules") || "[]");
-    const cooldowns = JSON.parse(localStorage.getItem("cooldown_modules") || "{}");
-    const now = Date.now();
-
-    const updatedModules = INITIAL_MODULES.map(mod => {
-      if (completed.includes(mod.id)) {
-        return { ...mod, status: "completed" };
-      }
-      if (cooldowns[mod.id] && cooldowns[mod.id] > now) {
-        return { ...mod, status: "cooldown" };
-      }
-      return mod;
-    });
-
-    if (completed.includes("w1-m0") && updatedModules[1].status === "locked") {
-      updatedModules[1].status = "active";
-      updatedModules[1].resourceList = [{ title: "Zustand Core Concepts", type: "Video", url: "#" }];
+  const refresh = useCallback(async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
     }
-
-    setModules(updatedModules);
-  };
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getLearningPath(userId);
+      setPath(data);
+      setModules(applyProgress(flattenPath(data)));
+    } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 404) {
+        setError("not_found");
+      } else {
+        setError(e?.message || "Failed to load learning path");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     setIsClient(true);
-    syncData();
-  }, []);
+    refresh();
+  }, [refresh]);
+
+  // Auto-poll: dacă tocmai a fost încărcat un CV, learning-path-agent generează
+  // curriculum-ul async (~20-40s după cv.analyzed). În loc să forțăm refresh
+  // manual, retry-uim în liniște la fiecare 5s timp de 90s când suntem pe 404.
+  useEffect(() => {
+    if (error !== "not_found" || !userId) return;
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (Date.now() - start > 90_000) {
+        clearInterval(interval);
+        return;
+      }
+      refresh();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [error, userId, refresh]);
 
   const handleResetStorage = () => {
     localStorage.removeItem("completed_modules");
     localStorage.removeItem("cooldown_modules");
-    syncData();
+    if (path) setModules(applyProgress(flattenPath(path)));
     setExpandedModule(null);
   };
 
@@ -67,7 +134,14 @@ export default function LearningPathPage() {
              <GraduationCap size={16} />
              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Curriculum v2.0</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white uppercase leading-none">Your Growth Path</h1>
+          <h1 className="text-2xl font-black tracking-tight text-white uppercase leading-none">
+            {path?.title || "Your Growth Path"}
+          </h1>
+          {path?.target_role && (
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">
+              Target role: {path.target_role} • {path.estimated_weeks} weeks
+            </p>
+          )}
         </div>
         
         <div className="flex items-center gap-6 shrink-0">
@@ -93,7 +167,77 @@ export default function LearningPathPage() {
         </div>
       </div>
 
+      {/* LOADING */}
+      {loading && (
+        <div className="flex-1 flex items-center justify-center min-h-0 text-xs font-black uppercase tracking-widest text-slate-500">
+          Loading your curriculum...
+        </div>
+      )}
+
+      {/* EMPTY / NO PATH YET — distinct copy if a CV was just analyzed */}
+      {!loading && (error === "not_found" || (!path && !error)) && (() => {
+        const cvRaw = typeof window !== "undefined" ? localStorage.getItem("careerpath_cv_analysis") : null;
+        const cv = cvRaw ? JSON.parse(cvRaw) : null;
+        const recentlyAnalyzed = cv?.analyzedAt && Date.now() - cv.analyzedAt < 5 * 60 * 1000;
+        return (
+          <div className="flex-1 flex items-center justify-center min-h-0">
+            <div className="max-w-lg w-full bg-[#0b0f1a]/80 border border-white/5 rounded-[28px] p-10 flex flex-col items-center text-center shadow-2xl backdrop-blur-xl">
+              <div className="w-16 h-16 rounded-[20px] bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 mb-6 shadow-inner">
+                <Sparkles size={26} className={cn(recentlyAnalyzed && "animate-pulse", "fill-current")} />
+              </div>
+              {recentlyAnalyzed ? (
+                <>
+                  <h2 className="text-lg font-black uppercase tracking-tight text-white mb-3">Building your curriculum</h2>
+                  <p className="text-xs font-medium text-slate-400 leading-relaxed mb-6 max-w-sm">
+                    Gemini is generating the weekly plan for <span className="text-indigo-300 font-bold">{cv.targetRole || "your target role"}</span>.
+                    This usually takes 20–40s after the CV is analyzed. The page refreshes itself.
+                  </p>
+                  <div className="w-32 h-1 bg-white/5 rounded-full overflow-hidden mb-4">
+                    <div className="h-full w-1/3 bg-indigo-500 rounded-full animate-[pulse_1.5s_ease-in-out_infinite]" />
+                  </div>
+                  <button
+                    onClick={refresh}
+                    className="text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
+                  >
+                    Check now
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-black uppercase tracking-tight text-white mb-3">No personalized path yet</h2>
+                  <p className="text-xs font-medium text-slate-400 leading-relaxed mb-8 max-w-sm">
+                    Upload your CV — once the AI finishes the gap analysis, your personalized week-by-week plan will land here.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    <Link
+                      href="/upload"
+                      className="flex-1 py-3.5 px-5 rounded-xl bg-white text-black hover:bg-indigo-500 hover:text-white font-black text-[10px] uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-all active:scale-95"
+                    >
+                      <MessageSquare size={12} /> Upload CV <ArrowRight size={12} className="opacity-60" />
+                    </Link>
+                    <Link
+                      href="/dashboard"
+                      className="flex-1 py-3.5 px-5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 font-black text-[10px] uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-all active:scale-95"
+                    >
+                      Back to dashboard
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* GENERIC ERROR */}
+      {!loading && error && error !== "not_found" && (
+        <div className="flex-1 flex items-center justify-center min-h-0 text-xs font-bold text-red-400">
+          Could not load the learning path: {error}
+        </div>
+      )}
+
       {/* MODULES FEED */}
+      {!loading && !error && path && modules.length > 0 && (
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4 space-y-4 min-h-0">
         {modules.map((mod, idx) => {
           const isCompleted = mod.status === "completed";
@@ -148,16 +292,25 @@ export default function LearningPathPage() {
                       className="grid grid-cols-1 md:grid-cols-2 gap-6 px-5 pb-5 pt-4 border-t border-white/5 bg-white/[0.01] cursor-default"
                     >
                       <div className="space-y-3 min-w-0">
+                        {mod.description && (
+                          <p className="text-[11px] font-medium text-slate-400 leading-relaxed px-1 mb-2">{mod.description}</p>
+                        )}
                         <h4 className="text-[9px] font-black text-indigo-400 uppercase tracking-widest px-1">Study Materials</h4>
                         <div className="space-y-2">
                           {mod.resourceList.map((res, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 rounded-[12px] bg-white/[0.03] border border-white/5 hover:border-indigo-500/30 hover:bg-white/[0.06] transition-all cursor-pointer group/item gap-3">
+                            <a
+                              key={i}
+                              href={res.url || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center justify-between p-3 rounded-[12px] bg-white/[0.03] border border-white/5 hover:border-indigo-500/30 hover:bg-white/[0.06] transition-all cursor-pointer group/item gap-3"
+                            >
                               <div className="flex items-center gap-3 min-w-0">
                                 <Play size={10} className="text-slate-500 group-hover/item:text-indigo-400 transition-colors shrink-0" />
                                 <span className="text-xs font-bold text-slate-300 truncate">{res.title}</span>
                               </div>
                               <ExternalLink size={12} className="text-slate-600 group-hover/item:text-white transition-colors shrink-0" />
-                            </div>
+                            </a>
                           ))}
                         </div>
                       </div>
@@ -217,6 +370,7 @@ export default function LearningPathPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

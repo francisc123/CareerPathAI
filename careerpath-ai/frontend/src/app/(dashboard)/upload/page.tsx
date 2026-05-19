@@ -29,10 +29,18 @@ interface SSEEvent {
   data: any;
 }
 
+interface CVAnalysisDetails {
+  strengths: string[];
+  gaps: string[];
+  careerRoadmap: string[];
+  targetRole?: string;
+}
+
 export default function CVUploadPage() {
   const [step, setStep] = useState<UploadStep>("idle");
   const [error, setError] = useState<ErrorType>(null);
   const [score, setScore] = useState<number | null>(null);
+  const [details, setDetails] = useState<CVAnalysisDetails | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -79,9 +87,32 @@ export default function CVUploadPage() {
 
       eventSource.onmessage = (event) => {
         try {
+          // notification-service forwards Kafka topic name as event.type — that
+          // means we receive "cv.analyzed" (dot), and the payload is spread at
+          // the top level. Accept both the dot and the legacy underscore form.
           const sseEvent: SSEEvent = JSON.parse(event.data);
-          if (sseEvent.type === 'cv_analyzed') {
-            setScore(sseEvent.data.score);
+          const t = sseEvent.type || (sseEvent as any)?.data?.type;
+          if (t === "cv.analyzed" || t === "cv_analyzed") {
+            const payload = sseEvent.data && Object.keys(sseEvent.data).length > 0
+              ? sseEvent.data
+              : (sseEvent as any); // SSE spreads at top level
+            const cvDetails = {
+              strengths: Array.isArray(payload.strengths) ? payload.strengths : [],
+              gaps: Array.isArray(payload.gaps) ? payload.gaps : [],
+              careerRoadmap: Array.isArray(payload.career_roadmap) ? payload.career_roadmap : [],
+              targetRole: payload.target_role || undefined,
+            };
+            setScore(payload.score ?? null);
+            setDetails(cvDetails);
+            // Persist for the dashboard "Career Snapshot" — read in /dashboard.
+            try {
+              localStorage.setItem("careerpath_cv_analysis", JSON.stringify({
+                score: payload.score ?? null,
+                seniority: payload.seniority || null,
+                ...cvDetails,
+                analyzedAt: Date.now(),
+              }));
+            } catch {}
             setStep("completed");
             eventSource.close();
             eventSourceRef.current = null;
@@ -92,14 +123,14 @@ export default function CVUploadPage() {
       };
 
       eventSource.onerror = (err) => {
-        console.error('SSE connection lost or not configured on backend, keeping client flow.', err);
-        // Fallback elegant în caz că SSE dă fail dar fișierul a fost deja încărcat
-        setTimeout(() => {
-          setScore(84);
-          setStep("completed");
-        }, 1500);
-        eventSource.close();
-        eventSourceRef.current = null;
+        // EventSource throws onerror at the end of a normal stream close too,
+        // so we only surface a real problem if we haven't already moved past
+        // the "analyzing" step.
+        console.warn('SSE stream closed', err);
+        if (eventSourceRef.current) {
+          eventSource.close();
+          eventSourceRef.current = null;
+        }
       };
     } catch (e) {
       console.error("Failed to init SSE stream structure", e);
@@ -114,41 +145,32 @@ export default function CVUploadPage() {
       return;
     }
 
+    if (!user?.id) {
+      setError("Te rugăm să te autentifici înainte de a încărca un CV.");
+      return;
+    }
+
     setError(null);
     setSelectedFile(file);
     setStep("uploading");
 
     try {
-      // Încercăm încărcarea reală pe server
       const response = await uploadCV(file);
       setJobId(response.job_id);
       setStep("analyzing");
-
-      if (user?.id) {
-        setupSSE(user.id);
-      } else {
-        // Dacă nu avem user.id în sesiune locală, rulăm simularea de analiză
-        runMockAnalysis();
-      }
-    } catch (err) {
-      console.warn('API Endpoint missing or rejected cors, entering local fail-safe simulation mode.', err);
-      // PENTRU REZISTENȚĂ: Rulăm simularea dacă serverul este oprit sau dă eroare
-      runMockAnalysis();
+      setupSSE(user.id);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || err?.message;
+      console.error("CV upload failed", err);
+      setError(
+        status === 401
+          ? "Sesiunea ta a expirat — te rugăm să te autentifici din nou."
+          : `Încărcarea CV-ului a eșuat${msg ? `: ${msg}` : "."}`
+      );
+      setStep("idle");
+      setSelectedFile(null);
     }
-  };
-
-  // --- MOCK FLOW SIMULATION ENGINE ---
-  const runMockAnalysis = () => {
-    setTimeout(() => {
-      setStep("analyzing");
-      setTimeout(() => {
-        setStep("routing");
-        setTimeout(() => {
-          setScore(82); // Scorul simulat stabil
-          setStep("completed");
-        }, 2000);
-      }, 2000);
-    }, 1500);
   };
 
   // --- DRAG AND DROP HANDLERS ---
@@ -356,64 +378,134 @@ export default function CVUploadPage() {
 
         {/* COMPLETED STATE */}
         {step === "completed" && score !== null && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch animate-in zoom-in-95 duration-500">
+          <div className="space-y-6 animate-in zoom-in-95 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
 
-            {/* SCORE GAUGE */}
-            <div className="bg-[#0b0f1a]/60 border border-white/5 p-8 rounded-[32px] flex flex-col items-center justify-center gap-6 shadow-2xl backdrop-blur-xl">
-              <CVScoreGauge score={score} size={180} />
-              <div className="text-center">
-                <h3 className="text-lg font-black text-white uppercase tracking-tight">
-                  {score >= 70 ? "Finding your best jobs..." : "Building your learning path..."}
-                </h3>
-                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1.5">
-                  {score >= 70
-                    ? "Your profile matches top opportunities"
-                    : "Let's enhance your skills for better matches"
-                  }
-                </p>
+              {/* SCORE GAUGE */}
+              <div className="bg-[#0b0f1a]/60 border border-white/5 p-8 rounded-[32px] flex flex-col items-center justify-center gap-6 shadow-2xl backdrop-blur-xl">
+                <CVScoreGauge score={score} size={180} />
+                <div className="text-center">
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                    {score >= 70 ? "Finding your best jobs..." : "Building your learning path..."}
+                  </h3>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1.5">
+                    {score >= 70
+                      ? "Your profile matches top opportunities"
+                      : "Let's enhance your skills for better matches"
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* NEXT STEPS */}
+              <div className="bg-[#0b0f1a]/60 border border-white/5 p-8 rounded-[32px] flex flex-col justify-between shadow-2xl backdrop-blur-xl">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3 text-indigo-400 border-b border-white/5 pb-3">
+                    <Zap size={16} className="fill-current" />
+                    <h3 className="font-black text-white uppercase tracking-tight text-base">
+                      What's Next?
+                    </h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    {score >= 70 ? (
+                      <div className="flex items-start gap-4 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                        <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-black text-white uppercase tracking-wide">Job Matching Ready</p>
+                          <p className="text-xs font-medium text-slate-400 leading-relaxed mt-1">Our matching index has identified high-compatibility parameters between your background and active job specifications.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
+                        <BookOpen size={16} className="text-blue-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-black text-white uppercase tracking-wide">Learning Path Created</p>
+                          <p className="text-xs font-medium text-slate-400 leading-relaxed mt-1">We found core architectural gaps in your experience profile. A customized training curriculum has been computed.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-white/5">
+                  <button
+                    onClick={() => router.push(score >= 70 ? '/jobs' : '/learning/path')}
+                    className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] outline-none"
+                  >
+                    {score >= 70 ? "Explore Job Node" : "Begin Learning Loop"}
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* NEXT STEPS */}
-            <div className="bg-[#0b0f1a]/60 border border-white/5 p-8 rounded-[32px] flex flex-col justify-between shadow-2xl backdrop-blur-xl">
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 text-indigo-400 border-b border-white/5 pb-3">
-                  <Zap size={16} className="fill-current" />
-                  <h3 className="font-black text-white uppercase tracking-tight text-base">
-                    What's Next?
-                  </h3>
+            {/* STRENGTHS + GAPS + ROADMAP — spec: produce strengths, gaps,
+                and exactly 3 platform-native roadmap steps. */}
+            {details && (details.strengths.length + details.gaps.length + details.careerRoadmap.length > 0) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* STRENGTHS */}
+                <div className="bg-[#0b0f1a]/60 border border-emerald-500/10 rounded-[28px] p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center gap-2 text-emerald-400 mb-4 border-b border-white/5 pb-3">
+                    <CheckCircle2 size={14} />
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">Core Strengths</h3>
+                  </div>
+                  {details.strengths.length === 0 ? (
+                    <p className="text-xs font-medium text-slate-500">No strengths surfaced yet.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {details.strengths.map((s, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-xs font-medium text-slate-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
-                <div className="space-y-4">
-                  {score >= 70 ? (
-                    <div className="flex items-start gap-4 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
-                      <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-black text-white uppercase tracking-wide">Job Matching Ready</p>
-                        <p className="text-xs font-medium text-slate-400 leading-relaxed mt-1">Our matching index has identified high-compatibility parameters between your background and active job specifications.</p>
-                      </div>
-                    </div>
+                {/* GAPS */}
+                <div className="bg-[#0b0f1a]/60 border border-amber-500/10 rounded-[28px] p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center gap-2 text-amber-400 mb-4 border-b border-white/5 pb-3">
+                    <AlertCircle size={14} />
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">Industry Gaps</h3>
+                  </div>
+                  {details.gaps.length === 0 ? (
+                    <p className="text-xs font-medium text-slate-500">No critical gaps detected.</p>
                   ) : (
-                    <div className="flex items-start gap-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                      <BookOpen size={16} className="text-blue-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-black text-white uppercase tracking-wide">Learning Path Created</p>
-                        <p className="text-xs font-medium text-slate-400 leading-relaxed mt-1">We found core architectural gaps in your experience profile. A customized training curriculum has been computed.</p>
-                      </div>
-                    </div>
+                    <ul className="space-y-3">
+                      {details.gaps.map((g, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-xs font-medium text-slate-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                          {g}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* CAREER ROADMAP */}
+                <div className="bg-[#0b0f1a]/60 border border-indigo-500/10 rounded-[28px] p-6 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center gap-2 text-indigo-400 mb-4 border-b border-white/5 pb-3">
+                    <ArrowRight size={14} />
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">Career Roadmap</h3>
+                  </div>
+                  {details.careerRoadmap.length === 0 ? (
+                    <p className="text-xs font-medium text-slate-500">Roadmap will be computed shortly.</p>
+                  ) : (
+                    <ol className="space-y-3">
+                      {details.careerRoadmap.map((step, i) => (
+                        <li key={i} className="flex items-start gap-3 text-xs font-medium text-slate-300">
+                          <span className="w-5 h-5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[9px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                            {i + 1}
+                          </span>
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
                   )}
                 </div>
               </div>
-
-              <div className="pt-6 border-t border-white/5">
-                <button
-                  onClick={() => router.push(score >= 70 ? '/jobs' : '/learning/path')}
-                  className="w-full py-3.5 bg-white text-black hover:bg-indigo-500 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] outline-none"
-                >
-                  {score >= 70 ? "Explore Job Node" : "Begin Learning Loop"}
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
 

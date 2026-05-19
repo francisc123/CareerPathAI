@@ -1,28 +1,30 @@
 import { WebSocket } from 'ws';
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 
 export function setupWebSocketRoutes(fastifyInstance: FastifyInstance) {
 
     fastifyInstance.addHook('onRequest', async (request: any, reply: any) => {
         if (request.raw.headers.upgrade && request.raw.headers.upgrade.toLowerCase() === 'websocket') {
 
-            const url = request.raw.url;
+            const url = request.raw.url || '';
+            const pathPart = url.split('?')[0];
+            const query = url.includes('?') ? url.split('?').slice(1).join('?') : '';
 
             // 1. Match pentru HR Interview
-            if (url.startsWith('/ws/hr-interview/')) {
-                const pathPart = url.split('?')[0];
+            if (pathPart.startsWith('/ws/hr-interview/')) {
                 const sessionId = pathPart.split('/').pop();
-                const targetUrl = `ws://127.0.0.1:8009/ws/hr/${sessionId}`;
+                // Upstream path expected by HR agent: /interview/hr/{session_id}
+                const targetUrl = `ws://hr-interview-agent:8009/interview/hr/${sessionId}${query ? '?' + query : ''}`;
 
                 // Predăm conexiunea către WebSocket
                 return handleProxy(request, targetUrl);
             }
 
             // 2. Match pentru Tech Interview
-            if (url.startsWith('/ws/tech-interview/')) {
-                const pathPart = url.split('?')[0];
+            if (pathPart.startsWith('/ws/tech-interview/')) {
                 const sessionId = pathPart.split('/').pop();
-                const targetUrl = `ws://127.0.0.1:8010/ws/tech/${sessionId}`;
+                // Upstream path expected by Tech agent: /interview/tech/{session_id}
+                const targetUrl = `ws://technical-interview-agent:8010/interview/tech/${sessionId}${query ? '?' + query : ''}`;
 
                 return handleProxy(request, targetUrl);
             }
@@ -36,8 +38,18 @@ export function setupWebSocketRoutes(fastifyInstance: FastifyInstance) {
 
         socket.handleUpgrade(request.raw, request.raw.socket, Buffer.alloc(0), (connection) => {
 
-            // Verificare Token
-            const token = request.query?.token;
+            // Verificare Token (în query string)
+            const token = request.query?.token || (() => {
+                try {
+                    if (!request.raw.url) return null;
+                    const q = request.raw.url.split('?')[1] || '';
+                    const params = new URLSearchParams(q);
+                    return params.get('token');
+                } catch {
+                    return null;
+                }
+            })();
+
             if (!token) {
                 console.warn('WebSocket connection attempt without token');
                 connection.close(1008, 'Token missing');
@@ -48,30 +60,32 @@ export function setupWebSocketRoutes(fastifyInstance: FastifyInstance) {
             const upstreamSocket = new WebSocket(targetUrl);
 
             // Client -> Agent
-            connection.on('message', (message: any) => {
+            // Preserve frame type: text frames must stay text (agenții fac
+            // websocket.receive_text() și pică pe binary frame).
+            connection.on('message', (message: any, isBinary: boolean) => {
                 if (upstreamSocket.readyState === WebSocket.OPEN) {
-                    upstreamSocket.send(message);
+                    upstreamSocket.send(message, { binary: isBinary });
                 }
             });
 
             // Agent -> Client
-            upstreamSocket.on('message', (message: any) => {
+            upstreamSocket.on('message', (message: any, isBinary: boolean) => {
                 if (connection.readyState === WebSocket.OPEN) {
-                    connection.send(message);
+                    connection.send(message, { binary: isBinary });
                 }
             });
 
             // Error handling & Cleanup
             upstreamSocket.on('close', (code: number, reason: any) => {
-                connection.close(code, reason.toString());
+                try { connection.close(code, reason?.toString?.() ?? ''); } catch {};
             });
 
             connection.on('close', (code: number, reason: any) => {
-                upstreamSocket.close(code, reason.toString());
+                try { upstreamSocket.close(code, reason?.toString?.() ?? ''); } catch {};
             });
 
             upstreamSocket.on('error', () => {
-                connection.close(1011, 'Upstream error');
+                try { connection.close(1011, 'Upstream error'); } catch {};
             });
         });
     }
