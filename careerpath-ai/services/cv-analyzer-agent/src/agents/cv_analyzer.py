@@ -45,6 +45,7 @@ class CVAnalysisResult(BaseModel):
     skills: list[str]
     strengths: list[str]
     gaps: list[str]
+    career_roadmap: list[str] = []  # exactly 3 platform-native action items; default keeps old transcripts loadable
     score_breakdown: ScoreBreakdown
 
 
@@ -129,8 +130,10 @@ def process_cv_pipeline(cv_text: str, user_id: str) -> dict:
         "seniority": analiza.seniority,
         "target_role": analiza.target_role,
         "skills_extracted": analiza.skills,
+        "strengths": analiza.strengths,
         "gaps": analiza.gaps,
         "gaps_identified": analiza.gaps,
+        "career_roadmap": analiza.career_roadmap,
         "score_breakdown": analiza.score_breakdown.model_dump(),
     }
 

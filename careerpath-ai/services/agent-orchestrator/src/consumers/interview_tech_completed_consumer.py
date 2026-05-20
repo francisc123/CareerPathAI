@@ -23,19 +23,30 @@ async def _handle(payload: dict) -> None:
         logger.warning("interview.tech.completed missing user_id — skip.")
         return
 
+    verdict = payload.get("verdict")  # "PASS" | "FAIL" | None
+    # Keep `score` (1-10 from the LLM) for the legacy blender in finalize.py,
+    # but also derive a safety net from verdict so the blender doesn't get
+    # None if the analyzer produced a verdict-only payload.
     score = payload.get("score")
+    if score is None:
+        score = 8 if verdict == "PASS" else 4 if verdict == "FAIL" else None
 
     await merge_state(
         user_id,
         {
             "tech_completed": True,
+            "tech_verdict": verdict,
             "tech_score": score,
+            "tech_readiness": payload.get("readiness_level"),
             "current_node": "tech_interview_completed",
         },
     )
 
     await maybe_finalize_workflow(user_id)
-    logger.info("interview.tech.completed processed for %s (score=%s).", user_id, score)
+    logger.info(
+        "interview.tech.completed processed for %s (verdict=%s, score=%s).",
+        user_id, verdict, score,
+    )
 
 
 async def consume() -> None:

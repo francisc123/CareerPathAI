@@ -89,6 +89,21 @@ Drept (nefinalizat, 2 yrs)."
 
 Use these as anchors. Two CVs of similar quality should score within ±3 points of each other.
 
+CAREER ROADMAP (exactly 3 platform-native steps):
+Always produce a list of EXACTLY 3 actionable next steps the candidate can take
+on this platform. These must be concrete, platform-native verbs — not generic
+motivational advice. Use one of these action templates, filled with skills /
+roles from the CV:
+  - "Complete the <Technology> Fundamentals Quiz"
+  - "Start the <Frontend|Backend|Data> Technical Interview"
+  - "Improve your <Skill> workflow"
+  - "Take the HR Behavioral Interview"
+  - "Build a portfolio project using <Technology>"
+Pick the 3 highest-leverage steps for THIS candidate given their score, gaps,
+and target_role. For high-scoring CVs (>=75) prioritize interview steps.
+For lower-scoring CVs prioritize quiz + portfolio steps for the most impactful
+gaps.
+
 Return exactly this JSON structure with no other text:
 {
   "score": <integer 0-100>,
@@ -97,6 +112,7 @@ Return exactly this JSON structure with no other text:
   "strengths": [<list of 2-4 concrete strengths with evidence from CV>],
   "gaps": [<list of 2-4 missing skills or weaknesses based on target role>],
   "target_role": <"most fitting job title based on CV content">,
+  "career_roadmap": [<exactly 3 platform-native action strings per the rules above>],
   "score_breakdown": {
     "experience": <0-30>,
     "skill_stack": <0-25>,

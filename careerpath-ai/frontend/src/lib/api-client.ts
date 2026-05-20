@@ -106,3 +106,16 @@ export const getLearningPath = async (userId: string): Promise<LearningPath> => 
   const response = await api.get(`/learning/${userId}`);
   return response.data;
 };
+
+export const regenerateLearningPath = async (
+  userId: string,
+  targetRole: string,
+  gaps?: string[],
+): Promise<LearningPath> => {
+  const response = await api.post('/learning/regenerate', {
+    user_id: userId,
+    target_role: targetRole,
+    gaps: gaps ?? [],
+  });
+  return response.data;
+};

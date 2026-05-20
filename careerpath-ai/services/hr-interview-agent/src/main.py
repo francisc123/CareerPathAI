@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -6,6 +7,7 @@ from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from .auth import WebSocketAuthError, authenticate_ws
 from .connection_manager import manager
 from .conversation import (
+    InterviewSummary,
     MAX_TURNS,
     analyze_and_save_transcript,
     get_turn_count,
@@ -41,23 +43,50 @@ async def health_check():
     return {"status": "ok"}
 
 
+def _parse_ws_message(raw: str) -> tuple[str, str]:
+    """
+    The frontend wraps messages as `{"type": "chat_message", "text": "..."}` or
+    sends `{"type": "end_interview"}`. Older clients send raw text. Return
+    (msg_type, content) so the rest of the handler can stay simple.
+    """
+    raw = (raw or "").strip()
+    if raw.startswith("{"):
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return "chat_message", raw
+        msg_type = str(payload.get("type") or "chat_message")
+        content = str(payload.get("text") or payload.get("content") or "")
+        return msg_type, content
+    return "chat_message", raw
+
+
 async def _finalize_session(
-    session_id: str, user_id: str, reason: str, lang: str = "en"
-) -> None:
-    """Run post-interview analysis, publish event, then clean up Redis."""
+    session_id: str,
+    user_id: str,
+    reason: str,
+    lang: str = "en",
+    summary: InterviewSummary | None = None,
+) -> InterviewSummary | None:
+    """Run post-interview analysis (if not already done), publish event, clean up Redis."""
     try:
-        summary = await analyze_and_save_transcript(session_id, user_id, lang=lang)
+        if summary is None:
+            summary = await analyze_and_save_transcript(session_id, user_id, lang=lang)
         await publish_interview_hr_completed(
             user_id=user_id,
             session_id=session_id,
-            score=summary.score,
-            feedback=summary.feedback,
+            verdict=summary.verdict,
+            summary=summary.summary,
+            strengths=summary.strengths,
+            areas_of_improvement=summary.areas_of_improvement,
             transcript=summary.transcript,
             turn_count=summary.turn_count,
             reason=reason,
         )
+        return summary
     except Exception:
         logger.exception("Eroare la finalizarea session %s.", session_id)
+        return summary
     finally:
         try:
             await reset_session_state(session_id)
@@ -83,17 +112,35 @@ async def websocket_endpoint(
     """
     lang = normalize_lang(lang)
     await manager.connect(session_id, websocket)
-    await manager.send_message(get_initial_greeting(lang), session_id)
+    # Spec requires the FIRST greeting in EN (handled by prompts) and "instant"
+    # render with no character-by-character animation, so we always send the
+    # full message in a single JSON envelope.
+    await websocket.send_json(
+        {"type": "chat_message", "text": get_initial_greeting(lang)}
+    )
 
     reason = "session_ended"
+    early_summary: InterviewSummary | None = None
     try:
         while True:
-            user_message = await websocket.receive_text()
+            raw = await websocket.receive_text()
+            msg_type, content = _parse_ws_message(raw)
+
+            if msg_type == "end_interview":
+                reason = "session_ended"
+                break
+
+            if not content:
+                continue
 
             turn = await increment_turn_count(session_id)
 
-            async for chunk in stream_ai_response(session_id, user_message, lang=lang):
-                await manager.send_message(chunk, session_id)
+            # Collect the full AI reply, then emit it once. No mid-stream sends
+            # → frontend renders the entire bubble instantly per spec.
+            full_reply = ""
+            async for chunk in stream_ai_response(session_id, content, lang=lang):
+                full_reply += chunk
+            await websocket.send_json({"type": "chat_message", "text": full_reply})
 
             if turn >= MAX_TURNS:
                 logger.info(
@@ -101,14 +148,26 @@ async def websocket_endpoint(
                     MAX_TURNS,
                     session_id,
                 )
-                await manager.send_message(
-                    "[SYSTEM] We've reached the end of this interview. "
-                    "Thank you for your time — generating your feedback now.",
-                    session_id,
-                )
                 reason = "turn_limit_reached"
-                await websocket.close(code=1000, reason="Turn limit reached")
                 break
+
+        # Natural end (turn limit or explicit end_interview): analyze NOW so we
+        # can push the verdict over the still-open WS before disconnecting.
+        early_summary = await analyze_and_save_transcript(session_id, user_id, lang=lang)
+        try:
+            await websocket.send_json({
+                "type": "interview_complete",
+                "verdict": early_summary.verdict,
+                "summary": early_summary.summary,
+                "strengths": early_summary.strengths,
+                "areas_of_improvement": early_summary.areas_of_improvement,
+            })
+        except Exception:
+            logger.exception("Trimitere interview_complete eșuată pentru %s.", session_id)
+        try:
+            await websocket.close(code=1000, reason="Interview complete")
+        except Exception:
+            pass
 
     except WebSocketDisconnect:
         reason = "disconnect"
@@ -118,7 +177,9 @@ async def websocket_endpoint(
         logger.exception("Eroare neașteptată în session %s.", session_id)
     finally:
         manager.disconnect(session_id)
-        await _finalize_session(session_id, user_id, reason, lang=lang)
+        await _finalize_session(
+            session_id, user_id, reason, lang=lang, summary=early_summary
+        )
 
 
 @app.exception_handler(WebSocketAuthError)

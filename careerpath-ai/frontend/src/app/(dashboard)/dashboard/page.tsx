@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ChatPanel } from "@/components/chat-panel";
 import { useAuthStore } from "@/store/auth.store";
-import { getLearningPath, getJobMatches, LearningPath } from "@/lib/api-client";
+import { getLearningPath, getJobMatches, regenerateLearningPath, LearningPath } from "@/lib/api-client";
 
 // --- MOCK DATA ---
 const POPULAR_CITIES = [
@@ -98,6 +98,9 @@ export default function DashboardPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [pathRefreshKey, setPathRefreshKey] = useState(0);
   const [snapshot, setSnapshot] = useState<CareerSnapshot>({
     cv: null,
     path: null,
@@ -198,7 +201,41 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [authUser?.id]);
+  }, [authUser?.id, pathRefreshKey]);
+
+  const handleRegeneratePath = async () => {
+    if (!authUser?.id) return;
+    const newRole = profile.role.trim();
+    if (!newRole) {
+      setRegenerateError("Selectează un Target Role mai întâi.");
+      return;
+    }
+    setIsRegenerating(true);
+    setRegenerateError(null);
+    try {
+      const cv = loadCvSnapshot();
+      await regenerateLearningPath(authUser.id, newRole, cv?.gaps);
+      // Update the cached CV snapshot so the snapshot card stops showing the
+      // old role (it falls back to cv.targetRole before path.target_role).
+      if (cv) {
+        try {
+          localStorage.setItem(
+            "careerpath_cv_analysis",
+            JSON.stringify({ ...cv, targetRole: newRole }),
+          );
+        } catch {}
+      }
+      setPathRefreshKey((k) => k + 1);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Nu am putut regenera materia.";
+      setRegenerateError(typeof msg === "string" ? msg : "Eroare necunoscută.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const handleSave = () => {
     setIsSaving(true);
@@ -253,14 +290,50 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20">
                 <EditableField label="Full Name" value={profile.fullName} onChange={(v) => setProfile({...profile, fullName: v})} placeholder="John Doe" />
                 
-                <SmartSearchDropdown 
-                  label="Target Role"
-                  icon={<Briefcase size={16} className="text-slate-500" />}
-                  placeholder="e.g. Frontend Developer"
-                  options={POPULAR_ROLES}
-                  value={profile.role} 
-                  onChange={(v) => setProfile({...profile, role: v})} 
-                />
+                <div className="flex flex-col gap-2">
+                  <SmartSearchDropdown
+                    label="Target Role"
+                    icon={<Briefcase size={16} className="text-slate-500" />}
+                    placeholder="e.g. Frontend Developer"
+                    options={POPULAR_ROLES}
+                    value={profile.role}
+                    onChange={(v) => setProfile({...profile, role: v})}
+                  />
+                  {(() => {
+                    const currentPathRole = (snapshot.path?.target_role || "").trim();
+                    const chosen = profile.role.trim();
+                    const roleChanged =
+                      chosen.length > 0 && chosen.toLowerCase() !== currentPathRole.toLowerCase();
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleRegeneratePath}
+                          disabled={isRegenerating || !roleChanged}
+                          className={cn(
+                            "self-start text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors border",
+                            isRegenerating
+                              ? "border-indigo-500/30 text-indigo-300 cursor-wait"
+                              : roleChanged
+                              ? "border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10"
+                              : "border-white/5 text-slate-600 cursor-not-allowed",
+                          )}
+                        >
+                          {isRegenerating
+                            ? "Regenerating curriculum..."
+                            : roleChanged
+                            ? "Apply & regenerate curriculum"
+                            : currentPathRole
+                            ? `Curriculum aligned with "${currentPathRole}"`
+                            : "Pick a role to generate"}
+                        </button>
+                        {regenerateError && (
+                          <p className="text-[10px] text-red-400 font-medium">{regenerateError}</p>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
                 
                 <SmartSearchDropdown 
                   label="Location"
@@ -592,11 +665,23 @@ function SmartSearchDropdown({ label, value, onChange, options, placeholder, ico
         <div className="absolute left-5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors group-focus-within:text-indigo-400">
           {icon}
         </div>
-        <input 
+        <input
           placeholder={placeholder}
           value={query}
           onFocus={() => setIsOpen(true)}
-          onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
+          onChange={(e) => {
+            const next = e.target.value;
+            setQuery(next);
+            onChange(next); // commit live so custom values aren't lost
+            setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onChange(query);
+              setIsOpen(false);
+            }
+          }}
           className="w-full bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.15] focus:bg-white/[0.05] focus:border-indigo-500/50 rounded-[16px] pl-12 pr-5 py-3.5 text-sm font-medium text-white outline-none transition-all placeholder:text-slate-600"
         />
       </div>
@@ -607,7 +692,7 @@ function SmartSearchDropdown({ label, value, onChange, options, placeholder, ico
             {query === "" ? "Suggestions" : "Results"}
           </div>
           {filtered.length > 0 ? filtered.map((item) => (
-            <button 
+            <button
               key={item}
               onClick={() => { onChange(item); setQuery(item); setIsOpen(false); }}
               className="w-full px-3 py-2.5 text-left text-xs font-medium text-slate-300 hover:bg-white/5 hover:text-white rounded-[12px] transition-colors flex items-center justify-between group/item"
@@ -616,7 +701,7 @@ function SmartSearchDropdown({ label, value, onChange, options, placeholder, ico
               <Plus size={12} className="opacity-0 group-hover/item:opacity-100 text-indigo-400 transition-opacity" />
             </button>
           )) : (
-            <div className="px-3 py-2.5 text-xs font-medium text-slate-500 italic">Press enter to use custom value.</div>
+            <div className="px-3 py-2.5 text-xs font-medium text-slate-500 italic">Press enter or click outside to use "{query}".</div>
           )}
         </div>
       )}

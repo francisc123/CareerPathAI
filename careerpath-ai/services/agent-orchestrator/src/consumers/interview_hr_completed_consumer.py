@@ -24,29 +24,40 @@ async def _handle(payload: dict) -> None:
         logger.warning("interview.hr.completed missing user_id — skip.")
         return
 
-    score = payload.get("score")
+    verdict = payload.get("verdict")  # "PASS" | "FAIL" | None (analysis failure)
+    # Derived numeric score keeps the downstream final-score blender working
+    # (see finalize.py) without forcing it to special-case PASS/FAIL.
+    derived_hr_score = 80 if verdict == "PASS" else 40 if verdict == "FAIL" else None
 
     await merge_state(
         user_id,
         {
             "hr_completed": True,
-            "hr_score": score,
+            "hr_verdict": verdict,
+            "hr_score": derived_hr_score,
             "current_node": "hr_interview_completed",
         },
     )
 
-    # Nudge to take the technical interview if not done yet.
+    # Nudge to take the technical interview if HR passed and tech not yet done.
+    # On FAIL, surface a softer follow-up instead of pushing tech.
     state = await load_state(user_id)
     if not state.get("tech_completed"):
+        if verdict == "PASS":
+            message = "Great job — you passed the HR screener! Try the Technical Interview next."
+        elif verdict == "FAIL":
+            message = "HR screener wrapped. Review your feedback and try again when you're ready."
+        else:
+            message = "HR interview complete. Take a look at your feedback."
         await notify_user(
             user_id,
             event_type="interview.hr.completed",
-            payload={"message": "Great job! Now try the Technical Interview."},
+            payload={"message": message},
         )
 
     # The workflow may already be ready to finalize if tech was done first.
     await maybe_finalize_workflow(user_id)
-    logger.info("interview.hr.completed processed for %s (score=%s).", user_id, score)
+    logger.info("interview.hr.completed processed for %s (verdict=%s).", user_id, verdict)
 
 
 async def consume() -> None:

@@ -22,4 +22,15 @@ public class Profile {
     private String linkedinUrl;
     private String targetRole;
     private String seniorityLevel;
+
+    // Populated from the orchestrator's shadow profile via profile.extracted.
+    // Stored as comma-separated values to avoid an extra join table.
+    @Column(length = 2048)
+    private String skillsCsv;
+
+    private Integer experienceYears;
+
+    // "in_tech" | "student" | "career_switch" — kept as String so new orchestrator
+    // values don't force a schema change.
+    private String currentSituation;
 }

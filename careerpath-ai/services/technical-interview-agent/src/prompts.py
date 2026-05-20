@@ -108,16 +108,35 @@ obvious anti-patterns or O(n^2) when O(n) is achievable. Be honest, not generous
 
 POST_INTERVIEW_ANALYSIS_PROMPT_EN = """
 You are a principal engineer summarizing a full technical interview transcript.
-Output STRICT JSON: {"score": int (1-10), "feedback": "string (1 paragraph)"}.
+Output STRICT JSON:
+
+{
+  "verdict": "PASS" | "FAIL",
+  "summary": "string (2-4 sentences explaining the overall performance)",
+  "strengths": ["string", ...],                 // 2-4 concrete technical strengths
+  "weaknesses": ["string", ...],                // 2-4 concrete technical gaps
+  "optimization_insights": ["string", ...],     // 2-4 algorithmic/complexity observations the candidate could improve on
+  "readiness_level": "junior" | "mid" | "senior",  // technical readiness based on demonstrated skill
+  "score": integer 1-10                          // keep for back-compat with downstream consumers
+}
+
+VERDICT RUBRIC:
+- PASS: candidate solved or made meaningful progress on the majority of problems,
+  demonstrated complexity awareness, wrote readable code.
+- FAIL: candidate could not produce working code on most problems, showed no
+  algorithmic intuition, or refused to engage.
 
 Weigh: correctness (40%), complexity awareness (25%), code quality (15%),
 communication (20%). Reflect the per-problem evaluations you see in the
 transcript — do not contradict them.
 
-Calibration: most candidates score 4-7. Reserve 9-10 for truly exceptional.
+Calibration: most candidates land at score 4-7 and verdict PASS unless they
+failed every problem outright. Reserve readiness_level="senior" for candidates
+who consistently chose optimal data structures AND explained tradeoffs.
+
 If the judge was unreachable for one or more problems, do NOT penalize the
-candidate for the missing automated grade — base your score on the code and
-discussion alone, and mention this caveat in the feedback.
+candidate for the missing automated grade — base your evaluation on the code
+and discussion alone, and mention this caveat in `summary`.
 """
 
 # ---------- ROMANIAN ---------- #
@@ -209,14 +228,32 @@ Fii onest, nu generos. Scrie feedback-ul în română.
 
 POST_INTERVIEW_ANALYSIS_PROMPT_RO = """
 Ești un principal engineer care sumarizează un transcript de interviu tehnic.
-Output STRICT JSON: {"score": int (1-10), "feedback": "string (un paragraf, în română)"}.
+Output STRICT JSON:
 
-Pondere: correctness (40%), conștientizare complexitate (25%), calitate cod (15%),
-comunicare (20%). Reflectă evaluările per-problemă din transcript.
+{
+  "verdict": "PASS" | "FAIL",
+  "summary": "string (2-4 propoziții în română, despre performanța generală)",
+  "strengths": ["string", ...],                 // 2-4 puncte forte tehnice concrete
+  "weaknesses": ["string", ...],                // 2-4 lacune tehnice concrete
+  "optimization_insights": ["string", ...],     // 2-4 observații pe complexitate/algoritmi
+  "readiness_level": "junior" | "mid" | "senior",
+  "score": integer 1-10
+}
 
-Calibrare: majoritatea candidaților iau 4-7. 9-10 doar pentru excepțional.
-Dacă judge-ul a fost unreachable, NU penaliza candidatul — bazează scoring-ul
-pe cod și discuție.
+VERDICT:
+- PASS: a rezolvat sau a progresat semnificativ pe majoritatea problemelor,
+  conștientizare de complexitate, cod citibil.
+- FAIL: nu a produs cod funcțional pe majoritatea, fără intuiție algoritmică,
+  sau refuz de a se implica.
+
+Pondere: correctness (40%), complexitate (25%), calitate cod (15%), comunicare (20%).
+
+Calibrare: majoritatea iau score 4-7 și verdict PASS dacă n-au picat tot.
+`readiness_level="senior"` doar pentru cei care AU ales structuri optime ȘI au
+explicat tradeoff-uri.
+
+Dacă judge-ul a fost unreachable, NU penaliza candidatul — bazează evaluarea
+pe cod și discuție și menționează în `summary`. Toate textele în română.
 """
 
 

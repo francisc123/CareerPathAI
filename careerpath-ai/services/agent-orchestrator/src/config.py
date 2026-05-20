@@ -8,6 +8,7 @@ TOPIC_CV_ANALYZED = "cv.analyzed"
 TOPIC_LEARNING_COMPLETED = "learning.completed"
 TOPIC_GAPS_IDENTIFIED = "gaps.identified"
 TOPIC_ORCHESTRATOR_DLQ = "orchestrator.dlq"
+TOPIC_PROFILE_EXTRACTED = "profile.extracted"
 JOB_SCRAPER_URL = os.getenv("JOB_SCRAPER_URL", "http://cp-job-scraper:8003")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

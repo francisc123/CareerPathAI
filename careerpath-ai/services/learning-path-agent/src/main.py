@@ -10,19 +10,24 @@ logging.basicConfig(
     force=True,
 )
 
+import json
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from .consumer import run_consumer_in_background
 from .database import (
     get_db_pool,
     get_learning_path,
     get_quiz_for_module,
+    get_user_difficulty_signal,
     parse_module_id,
+    save_learning_path,
     save_quiz_attempt,
 )
+from .generator import generate_learning_path_structure
 from .retry import startup_retry  # noqa: F401  - utility decorator available to wrap startup tasks
 
 logger = logging.getLogger(__name__)
@@ -108,6 +113,52 @@ async def get_learning_path_endpoint(user_id: str):
         raise HTTPException(status_code=404, detail="Learning path not found for this user")
 
     return result
+
+
+class RegenerateRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    target_role: str = Field(..., min_length=1)
+    # Optional: frontend can pass the gaps it cached from the CV analysis so the
+    # new curriculum still attacks the same weaknesses. Empty → Gemini builds a
+    # full curriculum for the role from scratch.
+    gaps: Optional[List[str]] = None
+
+
+@app.post("/learning/regenerate")
+async def regenerate_learning_path(req: RegenerateRequest):
+    """
+    Regenerates the learning path for a user with a new target_role.
+    Triggered when the user changes their Target Role in the dashboard.
+    Upserts on user_id, so the old path is replaced.
+    """
+    if _db_pool is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    target_role = req.target_role.strip()
+    if not target_role:
+        raise HTTPException(status_code=400, detail="target_role is required")
+
+    gaps = [g.strip() for g in (req.gaps or []) if g and g.strip()]
+    difficulty = await get_user_difficulty_signal(_db_pool, req.user_id)
+
+    logger.info(
+        "Regenerating learning path for user=%s target_role=%s gaps=%d",
+        req.user_id, target_role, len(gaps),
+    )
+
+    path_json_string = await generate_learning_path_structure(
+        gaps, target_role, difficulty_hint=difficulty.get("hint"),
+    )
+    if not path_json_string:
+        raise HTTPException(status_code=502, detail="Failed to generate learning path")
+
+    path_data = json.loads(path_json_string)
+    await save_learning_path(_db_pool, req.user_id, target_role, path_data)
+
+    saved = await get_learning_path(_db_pool, req.user_id)
+    if saved is None:
+        raise HTTPException(status_code=500, detail="Failed to persist learning path")
+    return saved
 
 
 @app.get("/learning/quiz/{module_id}", response_model=QuizResponse)

@@ -45,8 +45,10 @@ def _turn_key(session_id: str) -> str:
 
 
 class InterviewSummary(NamedTuple):
-    score: int | None
-    feedback: str | None
+    verdict: str | None                   # "PASS" | "FAIL" | None on analysis failure
+    summary: str | None
+    strengths: list[str]
+    areas_of_improvement: list[str]
     transcript: str
     turn_count: int
 
@@ -146,10 +148,19 @@ async def analyze_and_save_transcript(
 
     if not history:
         logger.info("Niciun istoric pentru session %s — sar peste analiză.", session_id)
-        return InterviewSummary(score=None, feedback=None, transcript="", turn_count=0)
+        return InterviewSummary(
+            verdict=None,
+            summary=None,
+            strengths=[],
+            areas_of_improvement=[],
+            transcript="",
+            turn_count=0,
+        )
 
-    score: int | None = None
-    feedback: str | None = None
+    verdict: str | None = None
+    summary_text: str | None = None
+    strengths: list[str] = []
+    areas: list[str] = []
 
     try:
         response = await _client.aio.models.generate_content(
@@ -158,19 +169,41 @@ async def analyze_and_save_transcript(
             config=_analysis_config(lang),
         )
         analysis_result = json.loads(response.text or "{}")
-        score = analysis_result.get("score")
-        feedback = analysis_result.get("feedback")
+        raw_verdict = str(analysis_result.get("verdict", "")).upper().strip()
+        verdict = raw_verdict if raw_verdict in ("PASS", "FAIL") else None
+        summary_text = analysis_result.get("summary")
+        strengths = list(analysis_result.get("strengths") or [])
+        areas = list(analysis_result.get("areas_of_improvement") or [])
     except Exception:
         logger.exception("Analiza post-interview a eșuat pentru session %s.", session_id)
 
+    # Persist a structured feedback JSON so downstream consumers (and the DB)
+    # keep the full detail without needing a schema migration. Score column is
+    # derived from verdict purely for back-compat: PASS=80, FAIL=40, unknown=NULL.
+    derived_score: int | None = (
+        80 if verdict == "PASS" else 40 if verdict == "FAIL" else None
+    )
+    feedback_blob = json.dumps(
+        {
+            "verdict": verdict,
+            "summary": summary_text,
+            "strengths": strengths,
+            "areas_of_improvement": areas,
+        }
+    )
+
     try:
-        await save_interview_results(session_id, user_id, score, feedback, transcript)
+        await save_interview_results(
+            session_id, user_id, derived_score, feedback_blob, transcript
+        )
     except Exception:
         logger.exception("Salvarea în DB a eșuat pentru session %s.", session_id)
 
     return InterviewSummary(
-        score=score,
-        feedback=feedback,
+        verdict=verdict,
+        summary=summary_text,
+        strengths=strengths,
+        areas_of_improvement=areas,
         transcript=transcript,
         turn_count=turn_count,
     )

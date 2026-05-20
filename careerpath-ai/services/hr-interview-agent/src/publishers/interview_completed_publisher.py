@@ -39,15 +39,18 @@ async def publish_interview_hr_completed(
     *,
     user_id: str,
     session_id: str,
-    score: int | None,
-    feedback: str | None,
+    verdict: str | None,
+    summary: str | None,
+    strengths: list[str],
+    areas_of_improvement: list[str],
     transcript: str,
     turn_count: int,
     reason: str = "session_ended",
 ) -> None:
     """
-    Publish `interview.hr.completed`. Schema matches `InterviewCompletedEvent`
-    in shared/types/kafka_events.py extended with HR-specific fields.
+    Publish `interview.hr.completed`. The HR verdict is now PASS/FAIL with
+    structured strengths + growth areas; downstream consumers should read
+    `verdict` instead of the legacy numeric `score`.
 
     `reason`: "session_ended" | "turn_limit_reached" | "disconnect"
     """
@@ -59,8 +62,10 @@ async def publish_interview_hr_completed(
         "user_id": user_id,
         "session_id": session_id,
         "type": "hr",
-        "score": score,
-        "feedback": feedback,
+        "verdict": verdict,
+        "summary": summary,
+        "strengths": strengths,
+        "areas_of_improvement": areas_of_improvement,
         "transcript": transcript,
         "turn_count": turn_count,
         "reason": reason,

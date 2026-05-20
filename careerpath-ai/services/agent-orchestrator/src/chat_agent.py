@@ -1,9 +1,10 @@
 import json
 import logging
 import redis.asyncio as redis_lib
+from aiokafka import AIOKafkaProducer
 from google import genai
 from google.genai import types
-from .config import GEMINI_API_KEY, REDIS_URL
+from .config import GEMINI_API_KEY, KAFKA_BROKERS, REDIS_URL, TOPIC_PROFILE_EXTRACTED
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,9 @@ STRICT RULES (follow without exception):
 
 SPECIAL CASE — if the user's first message is "__init__":
   Reply with EXACTLY the following text, no extra words, no modifications:
-  "Bun venit! Sunt aici să te ajut să-ți conturezi parcursul profesional. Pentru început, aș vrea să știu dacă lucrezi deja în domeniul tech, ești student sau te gândești să faci o reconversie?"
+  "Welcome! I'm here to help you shape your career path. To start, I'd like to know — are you already working in tech, a student, or thinking about a career switch?"
+  After this first greeting, rule 9 takes over: as soon as the user replies in
+  Romanian, switch all future replies to Romanian for the rest of the session.
 """
 
 # ---------------------------------------------------------------------------
@@ -98,6 +101,34 @@ async def _save_history(redis_client, user_id: str, history: list[dict]):
     await redis_client.set(f"chat:{user_id}", json.dumps(history), ex=86400)
 
 
+async def _publish_profile_extracted(user_id: str, profile: dict) -> None:
+    """
+    Fire-and-forget: publish profile.extracted so user-service can persist the
+    canonical row in PostgreSQL. Anonymous chat ids (anon_*) don't have a real
+    User row downstream, so we skip them and save the round-trip.
+    """
+    if not user_id or user_id.startswith("anon_"):
+        return
+    producer = AIOKafkaProducer(
+        bootstrap_servers=KAFKA_BROKERS,
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    )
+    try:
+        await producer.start()
+        await producer.send_and_wait(
+            TOPIC_PROFILE_EXTRACTED,
+            {"user_id": user_id, **profile},
+        )
+    except Exception as e:
+        # Profile sync is best-effort — never let it break the chat turn.
+        logger.warning("profile.extracted publish failed for %s: %s", user_id, e)
+    finally:
+        try:
+            await producer.stop()
+        except Exception:
+            pass
+
+
 async def _extract_and_save_profile(redis_client, user_id: str, history: list[dict]) -> dict | None:
     """Silently extract structured profile from conversation and persist to Redis.
     Returns the parsed profile dict (or None on failure) so callers can gate on slot completeness.
@@ -123,6 +154,9 @@ async def _extract_and_save_profile(redis_client, user_id: str, history: list[di
         profile = json.loads(text)
         await redis_client.set(f"profile:{user_id}", json.dumps(profile), ex=86400 * 7)
         logger.info(f"Profile updated for {user_id}: {profile}")
+        # Real-time sync into user-service PostgreSQL per spec
+        # ("REAL-TIME PROFILE SYNCHRONIZATION").
+        await _publish_profile_extracted(user_id, profile)
         return profile
     except Exception as e:
         logger.warning(f"Profile extraction skipped for {user_id}: {e}")
@@ -140,14 +174,15 @@ def _missing_slots(profile: dict | None) -> list[str]:
     return [s for s in REQUIRED_SLOTS if not profile.get(s)]
 
 
-# Demo-safe fallback questions used when Gemini is unavailable. Each one is a
-# binary-choice triage question, so the conversation can keep moving without an LLM.
+# Demo-safe fallback questions used when Gemini is unavailable. Kept in EN
+# because the spec mandates EN as the initial language; if Gemini comes back
+# online, normal mirroring resumes via the system prompt's rule 9.
 _FALLBACK_QUESTIONS = [
-    "Spune-mi pe scurt: lucrezi deja în tech, ești student, sau te gândești la reconversie?",
-    "Te atrage mai mult construirea de aplicații sau analiza datelor?",
-    "Preferi să lucrezi pe partea vizuală (frontend) sau pe logică/server (backend)?",
-    "Ai experiență practică cu cod, sau ești încă la nivel de teorie/cursuri?",
-    "Vrei să-mi dai mai multe detalii despre ce ai învățat până acum?",
+    "Quick check — are you already working in tech, a student, or considering a career switch?",
+    "Are you more drawn to building applications, or to analyzing data?",
+    "Do you prefer the visual side (frontend) or the logic/server side (backend)?",
+    "Do you have hands-on coding experience, or are you still at the theory/courses stage?",
+    "Want to share more details about what you've been learning so far?",
 ]
 
 

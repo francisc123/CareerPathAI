@@ -4,10 +4,14 @@
         test-flow1 test-flow2 smoke prod-up k8s-apply
 
 # ─── Dev ───────────────────────────────────────────────────────────────────────
-# Profiles are no longer used: a plain `docker compose up` starts the full stack.
+# Compose-ul are profiles: [agents|backend|frontend]. Fără ele, doar infrastructura
+# (postgres, redis, qdrant, redpanda, minio) pornește, fără frontend / api-gateway
+# / agenți. Activăm toate trei pentru un `make up` cap-coadă.
+COMPOSE_PROFILES_ALL := --profile agents --profile backend --profile frontend
+
 up:
 	@echo "→ Starting the full CareerPath AI stack (this can take a few minutes)…"
-	docker compose up -d --build
+	docker compose $(COMPOSE_PROFILES_ALL) up -d --build
 	@$(MAKE) wait-healthy
 	@echo ""
 	@echo "✅ Stack is up. Open:"
@@ -19,10 +23,10 @@ up:
 	@echo "   MailHog           http://localhost:8025"
 
 down:
-	docker compose down
+	docker compose $(COMPOSE_PROFILES_ALL) down
 
 restart:
-	docker compose down && docker compose up -d --build
+	docker compose $(COMPOSE_PROFILES_ALL) down && docker compose $(COMPOSE_PROFILES_ALL) up -d --build
 
 logs:
 	docker compose logs -f --tail=100
